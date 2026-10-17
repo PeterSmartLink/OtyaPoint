@@ -1,0 +1,247 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ATTENDANT
+  MANAGER
+  MANAGING_DIRECTOR
+  CHAIRMAN
+}
+
+enum LedgerType {
+  RETAIL
+  FINTECH_AGENCY
+}
+
+enum StockMovementType {
+  OPENING
+  PURCHASE
+  SALE
+  RETURN
+  ADJUSTMENT
+  DAMAGE
+}
+
+enum AgencyTransactionType {
+  CASH_IN
+  CASH_OUT
+  FLOAT_ADJUSTMENT
+  REVERSAL
+}
+
+enum ProviderStatus {
+  DRAFT
+  PENDING
+  SUCCEEDED
+  FAILED
+  UNKNOWN
+  REVERSED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  LOGIN
+  LOGOUT
+  OVERRIDE
+  RECONCILE
+  EXPORT
+}
+
+model User {
+  id                 String      @id @default(cuid())
+  email              String      @unique
+  displayName        String
+  passwordHash       String
+  role               UserRole    @default(ATTENDANT)
+  isActive           Boolean     @default(true)
+  failedLoginCount   Int         @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  stockMovements     StockMovement[] @relation("StockMovementActor")
+  retailSales        RetailSale[] @relation("RetailSaleActor")
+  agencyTransactions AgencyTransaction[] @relation("AgencyTransactionActor")
+  auditEvents        AuditEvent[] @relation("AuditActor")
+  approvedAudits     AuditEvent[] @relation("AuditApprover")
+
+  @@index([role, isActive])
+}
+
+model Product {
+  id              String          @id @default(cuid())
+  sku             String          @unique
+  name            String
+  description     String?
+  category        String?
+  variant         Json?
+  costPrice       Decimal         @db.Decimal(18, 2)
+  sellingPrice    Decimal         @db.Decimal(18, 2)
+  quantityOnHand  Int             @default(0)
+  reorderLevel    Int             @default(0)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  saleLines       RetailSaleLine[]
+  stockMovements  StockMovement[]
+
+  @@index([name])
+  @@index([category, isActive])
+  @@index([quantityOnHand, reorderLevel])
+}
+
+model RetailSale {
+  id                String          @id @default(cuid())
+  receiptNumber     String          @unique
+  status            ProviderStatus  @default(DRAFT)
+  currency          String          @default("UGX")
+  subtotal          Decimal         @db.Decimal(18, 2)
+  discountTotal     Decimal         @default(0) @db.Decimal(18, 2)
+  taxTotal          Decimal         @default(0) @db.Decimal(18, 2)
+  total             Decimal         @db.Decimal(18, 2)
+  costOfGoods       Decimal         @db.Decimal(18, 2)
+  paymentMethod     String?
+  efrisStatus       ProviderStatus  @default(DRAFT)
+  efrisInvoiceId    String?
+  efrisFiscalData   Json?
+  notes             String?
+  createdById       String
+  createdBy         User            @relation("RetailSaleActor", fields: [createdById], references: [id], onDelete: Restrict)
+  lines             RetailSaleLine[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([createdAt, status])
+  @@index([efrisStatus, createdAt])
+}
+
+model RetailSaleLine {
+  id             String     @id @default(cuid())
+  saleId         String
+  productId      String
+  skuSnapshot    String
+  nameSnapshot   String
+  quantity       Int
+  unitPrice      Decimal    @db.Decimal(18, 2)
+  unitCost       Decimal    @db.Decimal(18, 2)
+  lineTotal      Decimal    @db.Decimal(18, 2)
+  sale           RetailSale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product        Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model StockMovement {
+  id            String            @id @default(cuid())
+  productId     String
+  actorId       String
+  type          StockMovementType
+  quantityDelta Int
+  quantityAfter Int
+  unitCost      Decimal?          @db.Decimal(18, 2)
+  referenceType String?
+  referenceId   String?
+  reason        String
+  createdAt     DateTime          @default(now())
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  actor         User              @relation("StockMovementActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model AgencyTransaction {
+  id                 String                 @id @default(cuid())
+  reference          String                 @unique
+  type               AgencyTransactionType
+  provider           String?
+  providerReference  String?
+  providerStatus     ProviderStatus         @default(DRAFT)
+  amount             Decimal                @db.Decimal(18, 2)
+  commission         Decimal                @default(0) @db.Decimal(18, 2)
+  currency           String                 @default("UGX")
+  customerReference  String?
+  idempotencyKey     String                 @unique
+  requestMetadata    Json?
+  responseMetadata   Json?
+  failureCode        String?
+  failureMessage     String?
+  createdById        String
+  createdBy          User                   @relation("AgencyTransactionActor", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([createdAt, providerStatus])
+  @@index([provider, providerReference])
+  @@index([type, createdAt])
+}
+
+model LedgerEntry {
+  id               String     @id @default(cuid())
+  ledgerType       LedgerType
+  accountCode      String
+  currency         String     @default("UGX")
+  debit            Decimal    @default(0) @db.Decimal(18, 2)
+  credit           Decimal    @default(0) @db.Decimal(18, 2)
+  sourceType       String
+  sourceId         String
+  idempotencyKey   String     @unique
+  description      String
+  effectiveAt      DateTime   @default(now())
+  createdAt        DateTime   @default(now())
+
+  @@index([ledgerType, effectiveAt])
+  @@index([ledgerType, accountCode, effectiveAt])
+  @@index([sourceType, sourceId])
+}
+
+model AuditEvent {
+  id             String      @id @default(cuid())
+  actorId        String?
+  actor          User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  action         AuditAction
+  entityType     String
+  entityId       String?
+  reason         String?
+  beforeState    Json?
+  afterState     Json?
+  ipAddress      String?
+  requestId      String?
+  approverId     String?
+  approver       User?       @relation("AuditApprover", fields: [approverId], references: [id], onDelete: Restrict)
+  createdAt      DateTime    @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}
+
+model ReconciliationSession {
+  id                String     @id @default(cuid())
+  ledgerType        LedgerType
+  businessDate      DateTime   @db.Date
+  expectedCash      Decimal    @db.Decimal(18, 2)
+  countedCash       Decimal    @db.Decimal(18, 2)
+  expectedFloat     Decimal?   @db.Decimal(18, 2)
+  countedFloat      Decimal?   @db.Decimal(18, 2)
+  difference        Decimal    @db.Decimal(18, 2)
+  notes             String?
+  preparedById      String
+  approvedById      String?
+  status            String     @default("OPEN")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([ledgerType, businessDate, preparedById])
+  @@index([businessDate, ledgerType, status])
+}
