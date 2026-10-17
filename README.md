@@ -4,7 +4,7 @@ OmniPoint is a new, standalone retail and fintech agency operations platform for
 
 ## Current status
 
-The repository currently contains a **frontend prototype** with a responsive dashboard, sample inventory, navigation between planned workflows, a demo retail cart selector, a local-only fintech draft form, and a light/dark theme toggle. It is not a production-ready financial system. Sample records are illustrative, and no payment, inventory, authentication, ledger, export, EFRIS, or Telegram backend is connected.
+The repository currently contains a **frontend prototype** with a responsive dashboard, sample inventory, navigation between planned workflows, a demo retail cart selector, a local-only fintech draft form, and a light/dark theme toggle. It is not a production-ready financial system. Sample records are illustrative, and no payment, inventory, ledger, export, EFRIS, or Telegram backend is connected. A Supabase Auth sign-in foundation has been added but still requires environment configuration, staff provisioning, and verification before it can be used.
 
 ## Run locally
 
