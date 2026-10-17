@@ -33,11 +33,9 @@ export async function middleware(request: NextRequest) {
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
-  if (user && isLogin) {
-    const target = request.nextUrl.searchParams.get("next");
-    const safeTarget = target?.startsWith("/") && !target.startsWith("//") ? target : "/";
-    return NextResponse.redirect(new URL(safeTarget, request.url));
-  }
+
+  // Keep /login reachable for authenticated users; server-side staff checks
+  // prevent redirect loops for accounts without an active staff profile.
   return response;
 }
 
