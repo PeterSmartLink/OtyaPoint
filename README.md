@@ -31,6 +31,25 @@ The CI workflow checks migration filenames for the required 14-digit timestamp a
 
 Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
 
+## Secure staff onboarding
+
+- Public self-registration is not available. Only a verified Managing Director or Chairman can invite staff from `/management/staff`.
+- Invitations use Supabase Auth Admin and require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable. Never expose this key with a `NEXT_PUBLIC_` prefix or commit it to Git.
+- New staff profiles are inactive and have `PENDING` identity status. Login is denied until management records identity verification and activates the profile.
+- The unique agent ID is 6–12 uppercase letters/digits (for example, `2IQ35198`). Email and agent ID must both be unique.
+- Verify national ID and required documents through the organization’s approved process. This implementation deliberately does not store raw national ID numbers or identity-document images.
+- The first management administrator must be provisioned manually through the Supabase Dashboard and matching Prisma staff profile, with verified status and active access. Never add a public bootstrap-admin endpoint.
+- Audit events record invitations and approval/rejection decisions. These application controls do not replace independent security review or regulatory/provider approval.
+
+## Required environment variables
+
+- `DATABASE_URL` — server-side PostgreSQL connection string.
+- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase publishable/anon key for user sessions.
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only Supabase Admin key, required for invitations; set as an encrypted Vercel environment variable for the required deployment environments.
+
+Never commit environment files or secrets. After changing the Prisma schema, run `npm run db:validate`, `npm run db:generate`, and apply the migration using the approved migration process.
+
 ## Product boundaries
 
 - **Retail ledger:** product sales, inventory, cost of goods sold, and EFRIS invoice metadata.
