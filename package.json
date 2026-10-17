@@ -4,11 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
+    "@prisma/client": "^6.2.0",
     "lucide-react": "^0.468.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
@@ -20,6 +25,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.0",
+    "prisma": "^6.2.0",
     "typescript": "^5.7.2"
   }
 }
