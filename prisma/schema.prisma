@@ -14,6 +14,12 @@ enum UserRole {
   CHAIRMAN
 }
 
+enum IdentityStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 enum LedgerType {
   RETAIL
   FINTECH_AGENCY
@@ -63,7 +69,11 @@ model User {
   displayName        String
   passwordHash       String?
   role               UserRole    @default(ATTENDANT)
-  isActive           Boolean     @default(true)
+  isActive           Boolean     @default(false)
+  agentId            String?     @unique
+  phone              String?
+  identityStatus     IdentityStatus @default(PENDING)
+  approvedAt         DateTime?
   failedLoginCount   Int         @default(0)
   lockedUntil        DateTime?
   createdAt          DateTime    @default(now())
@@ -75,6 +85,7 @@ model User {
   approvedAudits     AuditEvent[] @relation("AuditApprover")
 
   @@index([role, isActive])
+  @@index([identityStatus, createdAt])
 }
 
 model Product {
