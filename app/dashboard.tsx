@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Activity, ArrowDownLeft, ArrowUpRight, Bell, Boxes, BriefcaseBusiness,
-  CheckCircle2, ChevronDown, CircleDollarSign, Command, CreditCard,
+  CheckCircle2, ChevronDown, CircleDollarSign, Command,
   Download, LayoutDashboard, LifeBuoy, Menu, Moon, MoreHorizontal,
   Package, Plus, Search, Settings2, ShieldCheck, ShoppingBag,
   Smartphone, Sun, Wallet, X
