@@ -25,7 +25,7 @@ npm run lint
 npm run build
 ```
 
-The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. The three existing migration filenames match the versions already recorded in the connected Supabase project. The additional foreign-key index migration in this branch is pending review and has not been applied to the live database. Do not rename or edit an applied migration; add a new, later migration for schema changes.
+The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. All four migration filenames match the versions recorded in the connected Supabase project, including the foreign-key index migration applied on 2026-10-17 UTC. Do not rename or edit an applied migration; add a new, later migration for schema changes. Do not rename or edit an applied migration; add a new, later migration for schema changes.
 
 ## Environment configuration
 
