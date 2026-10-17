@@ -3,7 +3,8 @@
 ## Phase 1 — Data model
 - [x] Define isolated retail and agency domain entities in Prisma.
 - [x] Add user roles, audit-event model, stock movements, provider states, and reconciliation sessions.
-- [ ] Generate and review the first PostgreSQL migration.
+- [x] Create and apply the initial SQL migration to the dedicated empty Supabase project; verify all nine tables and RLS settings.
+- [ ] Reconcile the checked-in SQL migration with Prisma CLI migration history before relying on automated deploy migrations.
 - [ ] Add development-only seed data that is clearly marked as synthetic.
 
 ## Phase 2 — Secure application services
