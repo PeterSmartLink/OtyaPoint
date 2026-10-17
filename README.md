@@ -20,9 +20,16 @@ Open http://localhost:3000.
 Build verification:
 
 ```bash
-npm run build
+npm run db:validate
 npm run lint
+npm run build
 ```
+
+The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. The migration timestamps in `supabase/migrations/` are aligned to the versions already recorded in the connected Supabase project. Do not rename or edit an applied migration; add a new, later migration for schema changes.
+
+## Environment configuration
+
+Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
 
 ## Product boundaries
 
