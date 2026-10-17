@@ -13,7 +13,7 @@ export async function requireStaff() {
   try {
     staff = await prisma.user.findUnique({
       where: { email: data.user.email.toLowerCase() },
-      select: { id: true, email: true, displayName: true, role: true, isActive: true },
+      select: { id: true, email: true, displayName: true, role: true, isActive: true, identityStatus: true },
     });
   } catch {
     // Fail closed: never render staff pages if the profile database is unavailable.
@@ -21,6 +21,6 @@ export async function requireStaff() {
     redirect("/login?error=staff-lookup-unavailable");
   }
 
-  if (!staff || !staff.isActive) redirect("/login?error=staff-access");
+  if (!staff || !staff.isActive || staff.identityStatus !== "VERIFIED") redirect("/login?error=staff-access");
   return staff;
 }
