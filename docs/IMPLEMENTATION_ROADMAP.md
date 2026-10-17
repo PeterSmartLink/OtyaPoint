@@ -8,8 +8,9 @@
 - [ ] Add development-only seed data that is clearly marked as synthetic.
 
 ## Phase 2 — Secure application services
-- [ ] Authentication and secure session lifecycle.
-- [ ] Server-side role/permission checks and re-authentication for sensitive actions.
+- [x] Add Supabase Auth server client, sign-in page, session-refresh middleware, and active staff-profile guard for the dashboard.
+- [ ] Configure Supabase URL/anon key in a local environment and verify sign-in with a manually provisioned test account.
+- [ ] Enforce server-side role/permission checks on every protected API/service operation and re-authentication for sensitive actions.
 - [ ] Product catalogue and inventory operations with concurrency-safe stock changes.
 - [ ] Retail sale posting in one database transaction: sale, lines, stock movements, and balanced ledger entries.
 - [ ] Agency transaction lifecycle with idempotency and provider status verification.
