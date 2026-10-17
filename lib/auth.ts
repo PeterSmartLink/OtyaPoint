@@ -11,8 +11,8 @@ export async function requireStaff() {
 
   const staff = await prisma.user.findUnique({
     where: { email: data.user.email.toLowerCase() },
-    select: { id: true, email: true, displayName: true, role: true, isActive: true },
+    select: { id: true, email: true, displayName: true, role: true, isActive: true, identityStatus: true },
   });
-  if (!staff || !staff.isActive) redirect("/login?error=staff-access");
+  if (!staff || !staff.isActive || staff.identityStatus !== "VERIFIED") redirect("/login?error=staff-access");
   return staff;
 }
