@@ -23,6 +23,7 @@
 - [ ] Automated tests for accounting invariants, authorization, idempotency, and failure recovery.
 
 ## Phase 4 — Integrations and production
+- [x] Create a Uganda compliance register covering EFRIS, data protection, agency/payment boundaries, accounting controls and hosting readiness; obtain expert confirmation before production.
 - [ ] Confirm approved MTN/Airtel provider route and current API contracts.
 - [ ] Confirm EFRIS integration requirements and validate invoice workflow.
 - [ ] Configure Telegram notifications without exposing customer or credential data.
