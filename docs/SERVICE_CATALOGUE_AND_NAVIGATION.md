@@ -2,9 +2,7 @@
 
 ## Product direction
 
-Use Quickteller / Interswitch's service-discovery pattern as a reference for organizing a broad service catalogue: a clear service landing page, category browsing, biller/provider search, service-specific forms, validation before submission, and a transaction history/status view. OmniPoint must use its own brand, interface, copy, and workflow design; this is an organizational reference, not a request to copy Quickteller's UI or assume an Interswitch partnership.
-
-Reference: Quickteller groups services around airtime and data, sending/receiving money, bill payments, and browsable biller categories. Interswitch documents provider-backed bills, airtime/data and voucher flows with transaction-status queries. See https://www.quickteller.com/ and https://docs.interswitchgroup.com/docs/value-added-services-overview.
+OmniPoint should make a broad range of business and customer services easy to discover through a clear service landing page, searchable categories, provider/biller selection, service-specific forms, validation before submission, and a transaction history/status view. The interface, branding, copy and workflows must be original to OmniPoint.
 
 ## Proposed service hub
 
@@ -49,7 +47,7 @@ Reference: Quickteller groups services around airtime and data, sending/receivin
 - Do not collect customer PINs, OTPs, card security codes or other secrets in OmniPoint forms.
 - Keep retail sales and agency/provider transaction accounting separate, including receipts, commissions, cash movements and reconciliation.
 - Any actual payment initiation or payment-system operation must be reviewed against the provider agreement and Uganda's regulatory requirements before enabling production.
-- Quickteller's currently indexed catalogue includes Nigeria-specific providers and services; do not import those providers or Nigerian currency/fees into the Uganda product.
+- Populate the catalogue with Uganda-relevant providers and services only after availability and commercial authorization are confirmed. Never import unsupported providers, foreign currencies or unverified fees.
 
 ## Suggested information architecture
 
