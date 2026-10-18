@@ -24,9 +24,9 @@ Introduce a single `SOVEREIGN` authorization role for the verified founder accou
 
 ## First-founder bootstrap
 
-1. Confirm the target Supabase Auth user ID and email using a privileged, server-side setup process.
+1. Confirm the target Supabase Auth user ID and verified email using a privileged, server-side setup process; link the staff profile using the normalized email because OmniPoint resolves staff profiles by email, while the Prisma staff ID is a separate internal ID.
 2. Verify there is no conflicting staff profile and confirm the schema/migration version.
-3. Provision exactly one staff profile with the matching Auth user ID, role `SOVEREIGN`, `isActive=true`, `identityStatus=VERIFIED`, and approval timestamp; record a bootstrap audit event where supported.
+3. Provision exactly one staff profile for that normalized email, using a new internal Prisma staff ID, role `SOVEREIGN`, `isActive=true`, `identityStatus=VERIFIED`, and approval timestamp; record a bootstrap audit event where supported.
 4. Make the bootstrap operation idempotent and non-public. It must fail closed if the expected account does not match.
 5. Remove/disable the one-time bootstrap path after successful provisioning; never expose service-role credentials in browser code or logs.
 6. Test login, authorization for each permission group, denial for ordinary staff, and financial-history immutability before deployment.
