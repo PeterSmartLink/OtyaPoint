@@ -5,7 +5,6 @@ type LoginPageProps = { searchParams: Promise<{ error?: string; next?: string }>
 const messages: Record<string, string> = {
   invalid: "Email or password is incorrect.",
   "staff-access": "Your account does not have a verified and active OmniPoint staff profile. Contact an administrator.",
-  "staff-lookup-unavailable": "Staff access could not be verified right now. Please try again later or contact an administrator.",
   "auth-not-configured": "Authentication is not configured yet. Set the Supabase public URL and publishable key in the server environment.",
   "staff-lookup-unavailable": "Staff access could not be verified because the staff database is unavailable. Please contact the system administrator.",
 };
