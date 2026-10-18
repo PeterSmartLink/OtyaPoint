@@ -13,7 +13,7 @@ export async function requireStaff() {
   try {
     staff = await prisma.user.findUnique({
       where: { email: data.user.email.toLowerCase() },
-      select: { id: true, email: true, displayName: true, role: true, isActive: true, identityStatus: true },
+      select: { id: true, email: true, displayName: true, role: true, isActive: true, identityStatus: true, agentId: true },
     });
   } catch {
     // Fail closed: never render staff pages if the profile database is unavailable.
