@@ -6,12 +6,13 @@ import { requireStaff } from "@/lib/auth";
 export type Permission =
   | "retail:read" | "retail:sell" | "retail:discount"
   | "inventory:read" | "inventory:adjust"
-  | "agency:read" | "agency:record" | "agency:reverse"
+  | "agency:read" | "agency:record" | "agency:reverse" | "agency:authorize"
   | "ledger:read" | "ledger:correct"
   | "reconciliation:prepare" | "reconciliation:approve"
   | "reports:export" | "team:manage" | "settings:manage" | "security:override";
 
 const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
+  SOVEREIGN: new Set(["retail:read", "retail:sell", "retail:discount", "inventory:read", "inventory:adjust", "agency:read", "agency:record", "agency:reverse", "agency:authorize", "ledger:read", "ledger:correct", "reconciliation:prepare", "reconciliation:approve", "reports:export", "team:manage", "settings:manage", "security:override"]),
   ATTENDANT: new Set(["retail:read", "retail:sell", "inventory:read", "agency:read", "agency:record", "reconciliation:prepare"]),
   MANAGER: new Set(["retail:read", "retail:sell", "retail:discount", "inventory:read", "inventory:adjust", "agency:read", "agency:record", "agency:reverse", "ledger:read", "reconciliation:prepare", "reports:export"]),
   MANAGING_DIRECTOR: new Set(["retail:read", "retail:sell", "retail:discount", "inventory:read", "inventory:adjust", "agency:read", "agency:record", "agency:reverse", "ledger:read", "reconciliation:prepare", "reconciliation:approve", "reports:export", "team:manage"]),

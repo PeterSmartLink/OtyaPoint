@@ -1,0 +1,64 @@
+name: Verify OmniPoint
+
+on:
+  pull_request:
+  push:
+    branches: [main, "work/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Build-time placeholders only; never use these for a real database or Auth session.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-real-key
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Validate migration filenames and unique versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          declare -A seen=()
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          if (( ${#files[@]} == 0 )); then
+            echo "No SQL migrations found."
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            name="${file##*/}"
+            if [[ ! "$name" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]]; then
+              echo "Invalid migration filename: $name"
+              exit 1
+            fi
+            version="${name%%_*}"
+            if [[ -n "${seen[$version]:-}" ]]; then
+              echo "Duplicate migration version $version: ${seen[$version]} and $name"
+              exit 1
+            fi
+            seen[$version]="$name"
+          done
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate Prisma schema
+        run: npm run db:validate
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
