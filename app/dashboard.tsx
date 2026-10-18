@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Activity, ArrowDownLeft, ArrowUpRight, Bell, Boxes, BriefcaseBusiness,
   CheckCircle2, ChevronDown, CircleDollarSign, Command,
@@ -23,7 +24,9 @@ const initialProducts = [
   { name: "Power Bank 20,000mAh", sku: "PWR-3014", category: "Power", stock: 4, status: "Low stock" },
 ];
 
-export default function Home() {
+type DashboardProps = { role: string; displayName: string; agentId: string | null };
+
+export default function Home({ role, displayName, agentId }: DashboardProps) {
   const [section, setSection] = useState<Section>("Overview");
   const [dark, setDark] = useState(true);
   const [mobileNav, setMobileNav] = useState(false);
@@ -59,11 +62,12 @@ export default function Home() {
             <div className="nav-label">{group.title}</div>
             {group.items.map(({name, icon: Icon}) => <button key={name} onClick={() => selectSection(name)} className={`nav-item ${section === name ? "active" : ""}`}><Icon size={18}/><span>{name}</span>{name === "Inventory" && <span className="nav-count">2</span>}</button>)}
           </div>)}
+        {(role === "MANAGING_DIRECTOR" || role === "CHAIRMAN") && <div className="nav-group"><div className="nav-label">ACCESS CONTROL</div><Link href="/management/staff" className="nav-item"><ShieldCheck size={18}/><span>Staff onboarding</span></Link></div>}
         </nav>
         <div className="sidebar-bottom">
-          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Ledger separation on</strong><span>Retail and fintech are isolated.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
+          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Demo-only; no live payments.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
           <button className="nav-item support-link" onClick={() => setNotice("Support centre is a prototype placeholder. Connect a support channel before launch.")}><LifeBuoy size={18}/><span>Help & support</span></button>
-          <div className="profile-row"><div className="avatar">C</div><div className="profile-copy"><strong>Chairman</strong><span>Root administrator · Demo</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
+          <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
         </div>
       </aside>
 
@@ -72,13 +76,13 @@ export default function Home() {
       <section className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><button className="mobile-menu icon-button" onClick={() => setMobileNav(true)} aria-label="Open menu"><Menu size={20}/></button><span>Workspace</span><span className="crumb-slash">/</span><strong>{section}</strong></div>
-          <div className="top-actions"><div className="environment-pill"><span/> DEMO ENVIRONMENT</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No live alerts are connected in this prototype.")}><Bell size={18}/><i/></button><div className="top-avatar">C</div></div>
+          <div className="top-actions"><div className="environment-pill"><span/> DEMO ENVIRONMENT</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No live alerts are connected in this prototype.")}><Bell size={18}/><i/></button><div className="top-avatar">{displayName.trim().charAt(0).toUpperCase()}</div></div>
         </header>
 
         <div className="page-content">
           {notice && <div className="notice-banner"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={16}/></button></div>}
           {section === "Overview" ? <>
-            <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot"/> MONDAY, OCTOBER 18, 2026</div><h1>Good day, Chairman <span className="wave">✳</span></h1><p className="page-description">Here’s what’s happening across your business today.</p></div><button className="secondary-button" onClick={() => setNotice("Report export will be enabled when the reporting API is connected.")}><Download size={16}/> Export report</button></div>
+            <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot"/> MONDAY, OCTOBER 18, 2026</div><h1>Good day, {displayName.split(" ")[0]} <span className="wave">✳</span></h1><p className="page-description">Here’s what’s happening across your business today.</p></div><button className="secondary-button" onClick={() => setNotice("Report export will be enabled when the reporting API is connected.")}><Download size={16}/> Export report</button></div>
             <div className="demo-banner"><div className="demo-banner-icon"><Activity size={18}/></div><div><strong>You’re viewing a demo workspace</strong><p>Sample figures and products illustrate the interface. No live transactions, balances, or provider connections are active.</p></div><span className="demo-tag">PREVIEW</span></div>
             <div className="section-heading"><div><h2>Business overview</h2><p>Retail and fintech are tracked independently.</p></div><button className="period-select" onClick={() => setNotice("Date filters will be connected to real reporting data.")}>Today <ChevronDown size={15}/></button></div>
             <div className="metric-grid">
