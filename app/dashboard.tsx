@@ -62,7 +62,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
             <div className="nav-label">{group.title}</div>
             {group.items.map(({name, icon: Icon}) => <button key={name} onClick={() => selectSection(name)} className={`nav-item ${section === name ? "active" : ""}`}><Icon size={18}/><span>{name}</span>{name === "Inventory" && <span className="nav-count">2</span>}</button>)}
           </div>)}
-        {(role === "MANAGING_DIRECTOR" || role === "CHAIRMAN") && <div className="nav-group"><div className="nav-label">ACCESS CONTROL</div><Link href="/management/staff" className="nav-item"><ShieldCheck size={18}/><span>Staff onboarding</span></Link></div>}
+        {(role === "MANAGING_DIRECTOR" || role === "CHAIRMAN" || role === "SOVEREIGN") && <div className="nav-group"><div className="nav-label">ACCESS CONTROL</div><Link href="/management/staff" className="nav-item"><ShieldCheck size={18}/><span>Staff onboarding</span></Link></div>}
         </nav>
         <div className="sidebar-bottom">
           <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Demo-only; no live payments.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
