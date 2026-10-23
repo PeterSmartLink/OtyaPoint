@@ -110,8 +110,12 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const linkedSaleId=typeof b.linkedSaleId==="string"?b.linkedSaleId.trim():null;
       const selectedProvider=typeof b.selectedProvider==="string"?b.selectedProvider:null;
       const selectedProduct=typeof b.selectedProduct==="string"?b.selectedProduct.trim():null;
+      const optionalStringHasWrongType=(key:string)=>Object.prototype.hasOwnProperty.call(b,key)&&b[key]!==null&&typeof b[key]!=="string";
       if(!allowedTypes.includes(operationType)||!Number.isSafeInteger(amountMinorUnits)||(amountMinorUnits as number)<=0||
-         currency!=="UGX"||(customerReference!==null&&customerReference.length>120)||
+         (Object.prototype.hasOwnProperty.call(b,"currency")&&typeof b.currency!=="string")||currency!=="UGX"||
+         optionalStringHasWrongType("customerReference")||optionalStringHasWrongType("linkedSaleId")||
+         optionalStringHasWrongType("selectedProvider")||optionalStringHasWrongType("selectedProduct")||
+         (customerReference!==null&&customerReference.length>120)||
          (linkedSaleId!==null&&(linkedSaleId.length<1||linkedSaleId.length>128))||
          (selectedProvider!==null&&!allowedProviders.includes(selectedProvider))||
          (selectedProduct!==null&&!/^[A-Za-z0-9._-]{1,80}$/.test(selectedProduct))||
