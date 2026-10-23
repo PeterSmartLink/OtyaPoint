@@ -29,7 +29,7 @@ The CI workflow checks migration filenames for the required 14-digit timestamp a
 
 ## Environment configuration
 
-Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
+Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Do not use a Supabase connection string for OmniPoint's live business database. The Cloudflare D1 database `omnipoint-migration-test` is an isolated compatibility/test resource, not production. Until the Cloudflare production data path is approved and tested, leave live database configuration unset in new environments; use only synthetic data in previews. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are existing Auth-related settings only and do not make Supabase the OmniPoint database. A successful build does not prove database connectivity or staff access is configured.
 
 ## Secure staff onboarding
 
