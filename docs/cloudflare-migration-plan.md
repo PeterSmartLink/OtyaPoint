@@ -4,9 +4,9 @@ Status: planning only. No production cutover, schema mutation, data export, secr
 
 ## Current assessment (2026-10-23)
 
-- OmniPoint Supabase project `iptzfakfeiyjnvepfqcg` is healthy in `eu-west-2`.
-- Nine public business tables were present. `User` and `AuditEvent` each had one row; the other seven tables had zero rows in the read-only inventory.
-- The application uses Next.js, Prisma configured for PostgreSQL, Supabase Auth, and Supabase-connected database access.
+- A Supabase project exists in the connected account history, but it is not OmniPoint's live database and must not be configured as its business data source.
+- The repository currently uses Next.js and Prisma configured for PostgreSQL; that does not establish the intended production database provider. The Cloudflare D1 database `omnipoint-migration-test` contains an isolated SQLite-compatible schema and synthetic test data only.
+- Current authentication code has Supabase Auth integration. Treat that as a separate identity dependency to review; it does not imply Supabase owns OmniPoint business data.
 - The README describes the app as a frontend prototype, not a production-ready financial system.
 
 ## Important compatibility decision
@@ -17,7 +17,7 @@ Supabase Auth is also not automatically replaced by Cloudflare Access. Define an
 
 ## Phases
 
-1. **Preserve:** keep Supabase available as the reference; use version-controlled Prisma schema and migration files as the schema baseline. Do not expose secrets or export live data without separate approval.
+1. **Preserve:** keep all existing resources and data untouched. Supabase is not OmniPoint's database. Use version-controlled schema/migration files as a design reference, then explicitly choose the Cloudflare production data path. Do not export or copy live data without separate approval.
 2. **Compatibility spike:** check Cloudflare account limits and costs, then create a separately named non-production D1 database only when safe. Use synthetic data only. Test decimal money handling, referential integrity, atomic sale/stock/ledger updates, balanced ledger posting, idempotency, reversals, audit history, auth, and role denial.
 3. **Application abstraction:** separate application routes from database-provider details; add contract and authorization tests; keep privileged onboarding closed by default.
 4. **Restore rehearsal:** validate migrations with synthetic data first. Any real-data export requires explicit approval, protected handling, row-count/checksum validation, and a successful restore rehearsal.
