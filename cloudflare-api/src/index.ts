@@ -1,4 +1,3 @@
-import { handleSavingsGroups, type SavingsEnv, type SavingsClaims } from "./savings-groups";
 interface D1Result<T> { results: T[] }
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -58,8 +57,6 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
   }
   const auth=await authenticate(request,env); if(isResponse(auth)) return auth;
   try {
-    const savingsResponse = await handleSavingsGroups(request, env as unknown as SavingsEnv, auth as SavingsClaims, requestId);
-    if (savingsResponse) return savingsResponse;
     if(request.method==="GET"&&url.pathname==="/api/products") {
       const rows=await env.DB.prepare("SELECT id,sku,name,description,category,sellingPrice,quantityOnHand,reorderLevel,isActive FROM Product WHERE isActive=1 ORDER BY name LIMIT 200").all();
       return json({data:rows.results,requestId});
