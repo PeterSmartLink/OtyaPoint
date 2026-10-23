@@ -11,7 +11,7 @@ export interface SavingsD1Statement {
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
   run(): Promise<unknown>;
 }
-export interface SavingsEnv { DB: { prepare(query: string): SavingsD1Statement } }
+export interface SavingsEnv { DB: { prepare(query: string): SavingsD1Statement; batch<T = unknown>(statements: SavingsD1Statement[]): Promise<T[]> } }
 export type SavingsRole = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 export interface SavingsClaims { sub: string; role: SavingsRole }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -154,10 +154,10 @@ export async function handleSavingsGroups(
     if (!await memberExists(env, groupId, memberId)) return json({ error: "active_member_required", requestId }, 409);
     const contributionId = id();
     try {
-      await env.DB.prepare(
-        "INSERT INTO SavingsContribution (id,groupId,memberId,contributionType,amount,currency,paymentMethod,externalReference,idempotencyKey,receivedById,notes) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)"
-      ).bind(contributionId, groupId, memberId, contributionType, b.amount, currency, paymentMethod, str(b.externalReference,120)||null, key, claims.sub, str(b.notes,500)||null).run();
-      await audit(env, groupId, claims.sub, "POST", "SavingsContribution", contributionId, requestId);
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO SavingsContribution (id,groupId,memberId,contributionType,amount,currency,paymentMethod,externalReference,idempotencyKey,receivedById,notes) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(contributionId, groupId, memberId, contributionType, b.amount, currency, paymentMethod, str(b.externalReference,120)||null, key, claims.sub, str(b.notes,500)||null),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id(), groupId, claims.sub, "POST", "SavingsContribution", contributionId, requestId)
+      ]);
       return json({ id: contributionId, groupId, memberId, amount: b.amount, currency, status: "POSTED", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "idempotency_conflict", requestId }, 409);
@@ -192,10 +192,10 @@ export async function handleSavingsGroups(
     if (!await memberExists(env, groupId, borrowerMemberId)) return json({ error: "active_member_required", requestId }, 409);
     const loanId = id();
     try {
-      await env.DB.prepare(
-        "INSERT INTO SavingsLoan (id,groupId,borrowerMemberId,loanCode,principalAmount,interestAmount,feeAmount,penaltyAmount,dueAt,idempotencyKey,createdById,notes,status) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'PENDING_APPROVAL')"
-      ).bind(loanId, groupId, borrowerMemberId, loanCode, b.principalAmount, b.interestAmount ?? 0, b.feeAmount ?? 0, b.penaltyAmount ?? 0, str(b.dueAt,40)||null, key, claims.sub, str(b.notes,500)||null).run();
-      await audit(env, groupId, claims.sub, "REQUEST", "SavingsLoan", loanId, requestId);
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO SavingsLoan (id,groupId,borrowerMemberId,loanCode,principalAmount,interestAmount,feeAmount,penaltyAmount,dueAt,idempotencyKey,createdById,notes,status) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'PENDING_APPROVAL')").bind(loanId, groupId, borrowerMemberId, loanCode, b.principalAmount, b.interestAmount ?? 0, b.feeAmount ?? 0, b.penaltyAmount ?? 0, str(b.dueAt,40)||null, key, claims.sub, str(b.notes,500)||null),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id(), groupId, claims.sub, "REQUEST", "SavingsLoan", loanId, requestId)
+      ]);
       return json({ id: loanId, groupId, borrowerMemberId, loanCode, status: "PENDING_APPROVAL", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "loan_code_or_idempotency_conflict", requestId }, 409);
@@ -250,11 +250,14 @@ export async function handleSavingsGroups(
     }
     const loan = await env.DB.prepare("SELECT id,status FROM SavingsLoan WHERE id=?1 AND groupId=?2").bind(loanId, groupId).first<{id:string;status:string}>();
     if (!loan) return json({ error: "loan_not_found", requestId }, 404);
-    if (!["APPROVED","DISBURSED"].includes(loan.status)) return json({ error: "loan_not_repayable", status: loan.status, requestId }, 409);
+    // Approval is not proof of payout. Only a verified disbursement may be repaid.
+    if (loan.status !== "DISBURSED") return json({ error: "loan_not_repayable", status: loan.status, requestId }, 409);
     const repaymentId = id();
     try {
-      await env.DB.prepare("INSERT INTO SavingsLoanRepayment (id,loanId,amount,principalPortion,interestPortion,feePortion,penaltyPortion,currency,paymentMethod,externalReference,idempotencyKey,receivedById) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)").bind(repaymentId,loanId,b.amount,principal,interest,fee,penalty,currency,paymentMethod,str(b.externalReference,120)||null,key,claims.sub).run();
-      await audit(env, groupId, claims.sub, "POST", "SavingsLoanRepayment", repaymentId, requestId);
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO SavingsLoanRepayment (id,loanId,amount,principalPortion,interestPortion,feePortion,penaltyPortion,currency,paymentMethod,externalReference,idempotencyKey,receivedById) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)").bind(repaymentId,loanId,b.amount,principal,interest,fee,penalty,currency,paymentMethod,str(b.externalReference,120)||null,key,claims.sub),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id(), groupId, claims.sub, "POST", "SavingsLoanRepayment", repaymentId, requestId)
+      ]);
       return json({ id: repaymentId, loanId, amount: b.amount, currency, status: "POSTED", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "idempotency_conflict", requestId }, 409);
