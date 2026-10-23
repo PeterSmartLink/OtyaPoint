@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OmniPoint Single-Business API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     API contract for the owner's own shop. Currency is UGX. This is a development
     scaffold, not a live payment API. Provider operations and financial posting
@@ -50,11 +50,28 @@ paths:
           description: Sale not recorded; posting is disabled
   /api/agency-transactions:
     post:
-      summary: Agency transaction
-      description: Intentionally disabled; no provider call or transaction record is made.
+      summary: Agency and value-added service operation
+      description: |
+        Intentionally disabled. Future supported operation types include mobile-money
+        agency, airtime/data, bill payments and float movements. This route currently
+        makes no provider request and records no operation.
       responses:
         '501':
           description: Provider adapter and safety controls required
+  /api/payments/checkout:
+    post:
+      summary: Sale-linked customer payment
+      description: Planned contract only; not implemented. Must use an approved hosted/tokenized checkout and verified status enquiry.
+      responses:
+        '501':
+          description: Checkout is not enabled; no payment was initiated
+  /api/provider/capabilities:
+    get:
+      summary: Planned provider capability registry
+      description: Planned contract only; must report configured sandbox capabilities without exposing credentials.
+      responses:
+        '501':
+          description: Provider capability registry is not implemented
   /api/ledger:
     get:
       summary: Read ledger entries
