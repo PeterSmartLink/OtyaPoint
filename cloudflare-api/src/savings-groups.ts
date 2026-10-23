@@ -244,7 +244,7 @@ export async function handleSavingsGroups(
     const currency = str(b.currency || "UGX", 3).toUpperCase();
     const principal = b.principalPortion ?? 0, interest = b.interestPortion ?? 0, fee = b.feePortion ?? 0, penalty = b.penaltyPortion ?? 0;
     if (!amount(b.amount) || !key || !["CASH","MOBILE_MONEY","BANK","OTHER"].includes(paymentMethod) ||
-        ![principal,interest,fee,penalty].every(v => Number.isSafeInteger(v) && v >= 0) ||
+        ![principal,interest,fee,penalty].every(v => typeof v === "number" && Number.isSafeInteger(v) && v >= 0) ||
         Number(b.amount) !== Number(principal)+Number(interest)+Number(fee)+Number(penalty) || !/^[A-Z]{3}$/.test(currency)) {
       return json({ error: "invalid_repayment_allocation", requestId }, 400);
     }
