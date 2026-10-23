@@ -83,13 +83,66 @@ def main():
         ).fetchone()
         assert debit == credit == 150000, (debit, credit)
 
+        # Provider-neutral payment operation supports explicit UNKNOWN status.
+        db.execute(
+            "INSERT INTO PaymentOperation(id,operationReference,operationType,status,selectedProvider,selectedProduct,amountMinorUnits,currency,requestFingerprint,idempotencyKey,createdById) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            ("pay-1", "PAY-TEST-1", "RETAIL_PAYMENT", "UNKNOWN", "AIRTEL_MONEY", "COLLECTION", 150000, "UGX", "fingerprint-v1", "payment-idem-1", "u1"),
+        )
+        # Reusing an idempotency key for a second operation is rejected.
+        expect_integrity_error(
+            db,
+            "INSERT INTO PaymentOperation(id,operationReference,operationType,amountMinorUnits,requestFingerprint,idempotencyKey,createdById) VALUES (?,?,?,?,?,?,?)",
+            ("pay-2", "PAY-TEST-2", "RETAIL_PAYMENT", 150000, "fingerprint-v1", "payment-idem-1", "u1"),
+        )
+        # Amount must be positive and currency must remain UGX.
+        expect_integrity_error(
+            db,
+            "INSERT INTO PaymentOperation(id,operationReference,operationType,amountMinorUnits,requestFingerprint,idempotencyKey,createdById) VALUES (?,?,?,?,?,?,?)",
+            ("pay-bad-amount", "PAY-TEST-BAD", "RETAIL_PAYMENT", 0, "fingerprint-bad", "payment-idem-bad", "u1"),
+        )
+        expect_integrity_error(
+            db,
+            "INSERT INTO PaymentOperation(id,operationReference,operationType,amountMinorUnits,currency,requestFingerprint,idempotencyKey,createdById) VALUES (?,?,?,?,?,?,?,?)",
+            ("pay-bad-currency", "PAY-TEST-CURRENCY", "RETAIL_PAYMENT", 100, "USD", "fingerprint-currency", "payment-idem-currency", "u1"),
+        )
+        # Provider attempt references are unique per provider; UNKNOWN must not be
+        # silently converted to FAILED or SUCCEEDED by a local timeout.
+        db.execute(
+            "INSERT INTO ProviderAttempt(id,operationId,provider,product,attemptNumber,status,providerReference) VALUES (?,?,?,?,?,?,?)",
+            ("attempt-1", "pay-1", "AIRTEL_MONEY", "COLLECTION", 1, "UNKNOWN", "AIRTEL-REF-TEST-1"),
+        )
+        expect_integrity_error(
+            db,
+            "INSERT INTO ProviderAttempt(id,operationId,provider,product,attemptNumber,status,providerReference) VALUES (?,?,?,?,?,?,?)",
+            ("attempt-2", "pay-1", "AIRTEL_MONEY", "COLLECTION", 2, "PENDING", "AIRTEL-REF-TEST-1"),
+        )
+        # Duplicate provider callback event IDs are rejected for deduplication.
+        db.execute(
+            "INSERT INTO ProviderEvent(id,provider,providerEventId,operationId,eventType,payloadDigest,signatureVerified) VALUES (?,?,?,?,?,?,?)",
+            ("evt-1", "AIRTEL_MONEY", "event-1", "pay-1", "PAYMENT_STATUS", "sha256-synthetic-digest", 1),
+        )
+        expect_integrity_error(
+            db,
+            "INSERT INTO ProviderEvent(id,provider,providerEventId,operationId,eventType,payloadDigest,signatureVerified) VALUES (?,?,?,?,?,?,?)",
+            ("evt-2", "AIRTEL_MONEY", "event-1", "pay-1", "PAYMENT_STATUS", "sha256-synthetic-digest", 1),
+        )
+        db.execute(
+            "INSERT INTO PaymentOperationEvent(id,operationId,eventType,fromStatus,toStatus,reason,actorId) VALUES (?,?,?,?,?,?,?)",
+            ("pay-event-1", "pay-1", "STATUS_CHANGED", "PENDING", "UNKNOWN", "Synthetic timeout; provider status enquiry required", "u1"),
+        )
+
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM Product").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AgencyTransaction").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM PaymentOperation").fetchone()[0] == 1
+        assert db.execute("SELECT status FROM PaymentOperation WHERE id='pay-1'").fetchone()[0] == "UNKNOWN"
+        assert db.execute("SELECT COUNT(*) FROM ProviderAttempt").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM ProviderEvent").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM PaymentOperationEvent").fetchone()[0] == 1
         db.close()
-    print("PASS: ordered D1 migrations, auth identity linking, schema constraints, FK checks, idempotency uniqueness, and synthetic balanced-ledger fixture")
+    print("PASS: ordered D1 migrations, auth identity linking, business constraints, provider idempotency, UNKNOWN status, provider-reference and callback deduplication, FK checks, and balanced-ledger fixture")
 
 
 if __name__ == "__main__":
