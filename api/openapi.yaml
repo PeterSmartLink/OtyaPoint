@@ -101,6 +101,10 @@ paths:
           description: Matching idempotent draft returned
         '400':
           description: Invalid request or missing idempotency key
+        '413':
+          description: Request body exceeds 16 KiB
+        '415':
+          description: Content-Type must be application/json
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
