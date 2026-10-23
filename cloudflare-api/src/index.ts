@@ -5,7 +5,7 @@ interface D1Statement {
   all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
   run(): Promise<unknown>;
 }
-interface D1Database { prepare(query: string): D1Statement }
+interface D1Database { prepare(query: string): D1Statement; batch<T = unknown>(statements: D1Statement[]): Promise<T[]> }
 
 export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
@@ -26,9 +26,6 @@ async function authenticate(request: Request, env: Env): Promise<Claims | Respon
 }
 const isResponse=(x: Claims|Response): x is Response => x instanceof Response;
 const can=(c:Claims,roles:Role[])=>roles.includes(c.role);
-async function audit(env:Env,actor:string,action:string,type:string,id:string|null,requestId:string) {
-  await env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(),actor,action,type,id,requestId).run();
-}
 export default { async fetch(request:Request,env:Env):Promise<Response> {
   const url=new URL(request.url), requestId=request.headers.get("cf-ray")||crypto.randomUUID();
   if(request.method==="GET"&&url.pathname==="/health") {
@@ -43,11 +40,22 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
     }
     if(request.method==="POST"&&url.pathname==="/api/products") {
       if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
-      const b=await request.json() as Record<string,unknown>, sku=typeof b.sku==="string"?b.sku.trim():"", name=typeof b.name==="string"?b.name.trim():"";
-      if(!sku||!name||!Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||!Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
-      const id=crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)").bind(id,sku,name,typeof b.description==="string"?b.description:null,typeof b.category==="string"?b.category:null,b.costPrice,b.sellingPrice).run();
-      await audit(env,auth.sub,"CREATE","Product",id,requestId); return json({id,sku,name},201);
+      if(!request.headers.get("content-type")?.toLowerCase().includes("application/json")) return json({error:"content_type_must_be_json"},415);
+      let parsed: unknown;
+      try { parsed=await request.json(); } catch { return json({error:"invalid_json"},400); }
+      if(!parsed || typeof parsed!=="object" || Array.isArray(parsed)) return json({error:"invalid_product"},400);
+      const b=parsed as Record<string,unknown>;
+      const sku=typeof b.sku==="string"?b.sku.trim():"", name=typeof b.name==="string"?b.name.trim():"";
+      if(!sku||sku.length>100||!name||name.length>200||!Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||!Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
+      if(b.description!==undefined && b.description!==null && (typeof b.description!=="string" || b.description.length>2000)) return json({error:"invalid_product"},400);
+      if(b.category!==undefined && b.category!==null && (typeof b.category!=="string" || b.category.length>100)) return json({error:"invalid_product"},400);
+      const id=crypto.randomUUID(), auditId=crypto.randomUUID();
+      // D1 batch executes both statements transactionally: never create a product without its audit event.
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)").bind(id,sku,name,b.description??null,b.category??null,b.costPrice,b.sellingPrice),
+        env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6)").bind(auditId,auth.sub,"CREATE","Product",id,requestId)
+      ]);
+      return json({id,sku,name},201);
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
