@@ -1,10 +1,12 @@
 # OmniPoint
 
-OmniPoint is a new, standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
+OmniPoint is the retail, inventory and agency-operations product of **Otya Hold Ltd, trading as OmniPoint**. It is being built for Uganda with a focus on clear workflows, trustworthy records and a friendly, accessible counter experience.
 
 ## Current status
 
-The repository currently contains a **frontend prototype** with a responsive dashboard, sample inventory, navigation between planned workflows, a demo retail cart selector, a local-only fintech draft form, and a light/dark theme toggle. It is not a production-ready financial system. Sample records are illustrative, and no payment, inventory, ledger, export, EFRIS, or Telegram backend is connected. A Supabase Auth sign-in foundation has been added but still requires environment configuration, staff provisioning, and verification before it can be used.
+This repository contains a frontend prototype and evolving foundations. Some screens use illustrative/sample data. Do not assume that payment execution, inventory persistence, agency ledger/reconciliation, EFRIS, telecom-provider integrations or Telegram workflows are production-ready merely because a UI or API scaffold exists. Authentication and database paths require environment configuration and end-to-end verification.
+
+See [Foundation standards](docs/FOUNDATION.md) for security, data integrity, deployment, recovery and delivery gates, and [Brand and product language](docs/BRAND-AND-PRODUCT-LANGUAGE.md) for the approved company/product hierarchy.
 
 ## Run locally
 
@@ -17,7 +19,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-Build verification:
+## Build verification
 
 ```bash
 npm run db:validate
@@ -25,56 +27,37 @@ npm run lint
 npm run build
 ```
 
-The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. All four migration filenames match the versions recorded in the connected Supabase project, including the foreign-key index migration applied on 2026-10-17 UTC. Do not rename or edit an applied migration; add a new, later migration for schema changes. Do not rename or edit an applied migration; add a new, later migration for schema changes.
+Run the checks supported by the repository before submitting a change. A successful build alone does not prove database connectivity, correct authorization, provider confirmation or production readiness.
 
 ## Environment configuration
 
-Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
+Use local environment files only on your machine and encrypted provider environment variables for deployments. Never commit secrets. Browser-safe Supabase URL/publishable keys are not database credentials; service-role keys, database URLs, signing keys and provider secrets must remain server-side. Configure only the variables required by the code path being deployed.
 
-## Secure staff onboarding
+## Staff access
 
-- Public self-registration is not available. Only a verified Managing Director or Chairman can invite staff from `/management/staff`.
-- Invitations use Supabase Auth Admin and require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable. Never expose this key with a `NEXT_PUBLIC_` prefix or commit it to Git.
-- New staff profiles are inactive and have `PENDING` identity status. Login is denied until management records identity verification and activates the profile.
-- The unique agent ID is 6–12 uppercase letters/digits (for example, `2IQ35198`). Email and agent ID must both be unique.
-- Verify national ID and required documents through the organization’s approved process. This implementation deliberately does not store raw national ID numbers or identity-document images.
-- The first management administrator must be provisioned manually through the Supabase Dashboard and matching Prisma staff profile, with verified status and active access. Never add a public bootstrap-admin endpoint.
-- Audit events record invitations and approval/rejection decisions. These application controls do not replace independent security review or regulatory/provider approval.
-
-## Required environment variables
-
-- `DATABASE_URL` — server-side PostgreSQL connection string.
-- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL.
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase publishable/anon key for user sessions.
-- `SUPABASE_SERVICE_ROLE_KEY` — server-only Supabase Admin key, required for invitations; set as an encrypted Vercel environment variable for the required deployment environments.
-
-Never commit environment files or secrets. After changing the Prisma schema, run `npm run db:validate`, `npm run db:generate`, and apply the migration using the approved migration process.
+Public self-registration and public bootstrap-admin endpoints must not be introduced. Staff invitations and activation require verified management authorization, server-side permission checks and audit events. The first administrator must be provisioned through a controlled, documented process. Collect and retain personal identity data only when necessary and approved.
 
 ## Product boundaries
 
-- **Retail ledger:** product sales, inventory, cost of goods sold, and EFRIS invoice metadata.
-- **Fintech agency ledger:** cash-in/out records, float movements, and earned commissions.
-- **Strict separation:** retail sales and agency transactions must never be silently merged.
-- **Auditability:** privileged actions require authorization and leave an audit trail.
-- **Provider truth:** a locally recorded transaction is not represented as successful until the relevant provider confirms it.
+- **Retail:** catalog, stock movements, sales, cost of goods sold and tax-invoice metadata.
+- **Agency operations:** cash-in/out, float movements, commissions and provider reconciliation.
+- **Separation:** retail and agency financial records must not be silently merged.
+- **Auditability:** privileged actions require server-side authorization and an audit trail.
+- **Provider truth:** a request is not successful until the authoritative provider confirms it.
+- **Legal identity:** use “Otya Hold Ltd trading as OmniPoint” where the formal legal entity is required; do not imply OmniPoint is a separate legal company without verified registration evidence.
 
-## Initial architecture
+## Architecture guardrails
 
-- Responsive web application for touch-friendly counter use.
-- TypeScript frontend and API boundary.
-- PostgreSQL relational data model (not yet implemented).
-- Role-based access control for attendants, managers, directors, and the root administrator (not yet implemented).
-- Provider adapters for future MTN, Airtel, EFRIS, and Telegram integrations.
+- PostgreSQL and Cloudflare D1 (SQLite) are different database engines. Test compatibility explicitly; do not blindly port Prisma/PostgreSQL schema or migrations to D1.
+- Keep test databases isolated from production data.
+- Treat Supabase as a recovery capability only after backup/restore has been tested. Treat Appwrite as contingency only after compatibility and failover have been proven.
+- No production DNS/routing changes or live financial operations without an approved plan, end-to-end tests, monitoring and rollback.
 
-## Security and project isolation
+## Delivery sequence
 
-This repository is the independent home for OmniPoint. Do not import Otya application code, databases, credentials, or production configuration. Never commit real credentials. Financial transaction execution, EFRIS compliance, and telecom integrations require approved access, provider-specific implementation, and verification before production use.
-
-## Planned delivery sequence
-
-1. Foundation, environment configuration, and security boundaries.
-2. Authentication, users, roles, and audit events.
-3. Retail catalog, inventory, and POS.
-4. Fintech agency ledger and reconciliation.
-5. Reports, exports, and management dashboards.
-6. Provider integrations, automated tests, and deployment hardening.
+1. Foundation, naming, environment and security boundaries.
+2. Authentication, authorization, roles and audit events.
+3. Retail catalog, inventory and point of sale.
+4. Agency ledger, idempotency and reconciliation.
+5. Reports, exports and management dashboards.
+6. Approved provider integrations, compliance review and deployment hardening.
