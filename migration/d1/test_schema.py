@@ -86,7 +86,6 @@ def main():
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
-        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM Product").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AgencyTransaction").fetchone()[0] == 1
         db.close()
