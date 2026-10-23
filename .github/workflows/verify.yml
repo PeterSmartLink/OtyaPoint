@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # Build-time placeholders only; never use these for a real database or Auth session.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-real-key
@@ -50,6 +49,8 @@ jobs:
             fi
             seen[$version]="$name"
           done
+      - name: Test isolated SQLite schema compatibility
+        run: python3 migration/d1/test_schema.py
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
