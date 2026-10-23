@@ -164,7 +164,8 @@ export async function handleSavingsGroups(
         env.DB.prepare("INSERT INTO SavingsContribution (id,groupId,memberId,contributionType,amount,currency,paymentMethod,externalReference,idempotencyKey,receivedById,notes) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)").bind(contributionId, groupId, memberId, contributionType, b.amount, currency, paymentMethod, str(b.externalReference,120)||null, key, claims.sub, str(b.notes,500)||null),
         env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id(), groupId, claims.sub, "POST", "SavingsContribution", contributionId, requestId)
       ]);
-      return json({ id: contributionId, groupId, memberId, amount: b.amount, currency, status: "POSTED", requestId }, 201);
+      // The receipt is recorded as pending; it is not treated as posted money until ledger-backed posting is implemented.
+      return json({ id: contributionId, groupId, memberId, amount: b.amount, currency, status: "PENDING", detail: "Recorded for review; not yet posted to the savings ledger.", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "idempotency_conflict", requestId }, 409);
       throw e;
@@ -272,7 +273,8 @@ export async function handleSavingsGroups(
         env.DB.prepare("INSERT INTO SavingsLoanRepayment (id,loanId,amount,principalPortion,interestPortion,feePortion,penaltyPortion,currency,paymentMethod,externalReference,idempotencyKey,receivedById) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)").bind(repaymentId,loanId,b.amount,principal,interest,fee,penalty,currency,paymentMethod,str(b.externalReference,120)||null,key,claims.sub),
         env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)").bind(id(), groupId, claims.sub, "POST", "SavingsLoanRepayment", repaymentId, requestId)
       ]);
-      return json({ id: repaymentId, loanId, amount: b.amount, currency, status: "POSTED", requestId }, 201);
+      // A repayment receipt is not financially posted until balanced ledger entries are created.
+      return json({ id: repaymentId, loanId, amount: b.amount, currency, status: "PENDING", detail: "Recorded for review; not yet posted to the savings ledger.", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "idempotency_conflict", requestId }, 409);
       throw e;
