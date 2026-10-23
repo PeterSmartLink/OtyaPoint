@@ -35,3 +35,32 @@ jobs:
         run: npm run lint
       - name: Build legacy dashboard (migration checkpoint only)
         run: npm run build
+      - name: Smoke test local Cloudflare Worker and fail-closed auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 dev --local --port 8787 --var AUTH_HMAC_SECRET:test-only-secret > "$RUNNER_TEMP/wrangler-smoke.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --silent --show-error --fail http://127.0.0.1:8787/health > "$RUNNER_TEMP/health.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$RUNNER_TEMP/wrangler-smoke.log"
+            echo "Worker health endpoint did not become ready" >&2
+            exit 1
+          fi
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("status") == "ok", d; print("PASS: local Worker health and D1 binding")' "$RUNNER_TEMP/health.json"
+          auth_status=$(curl --silent --output "$RUNNER_TEMP/auth.json" --write-out '%{http_code}' http://127.0.0.1:8787/api/products)
+          if [ "$auth_status" != "401" ]; then
+            cat "$RUNNER_TEMP/auth.json"
+            cat "$RUNNER_TEMP/wrangler-smoke.log"
+            echo "Expected unauthenticated API request to return 401, got $auth_status" >&2
+            exit 1
+          fi
+          echo "PASS: protected API rejects requests without a bearer token"
