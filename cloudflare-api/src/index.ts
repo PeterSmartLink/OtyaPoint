@@ -1,3 +1,12 @@
+interface D1Result<T> { results: T[] }
+interface D1Statement {
+  bind(...values: unknown[]): D1Statement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  run(): Promise<unknown>;
+}
+interface D1Database { prepare(query: string): D1Statement }
+
 export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Claims = { sub: string; role: Role; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
