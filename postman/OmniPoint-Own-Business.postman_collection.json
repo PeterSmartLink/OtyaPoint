@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "omnipoint-own-business-api",
     "name": "OmniPoint — Own Business API",
-    "description": "Private API tests for the single-shop OmniPoint system. Use only local Wrangler or an approved test Worker. No live payment calls are enabled.",
+    "description": "Private single-shop OmniPoint API tests. Local Wrangler only by default. Financial/provider operations are fail-closed; no live payment calls are enabled. Provider sandbox tests must be added only after Uganda product eligibility, sandbox host and contract are confirmed.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -164,6 +164,66 @@
             "url": "{{baseUrl}}/api/ledger?type=FINTECH_AGENCY"
           },
           "description": "Read-only; requires manager or higher test token."
+        }
+      ]
+    },
+    {
+      "name": "Interswitch / Quickteller — safety probes (local only)",
+      "description": "These probes call OmniPoint's local Worker only, never Interswitch. With a valid short-lived local test token, agency and sale posting should return 501 until reviewed controls are implemented.",
+      "item": [
+        {
+          "name": "Mobile-money agency — expected disabled",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/agency-transactions",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"CASH_IN\",\n  \"amount\": 10000,\n  \"currency\": \"UGX\",\n  \"provider\": \"INTERSWITCH_TEST_ONLY\",\n  \"idempotencyKey\": \"postman-mm-safety-001\"\n}"
+            }
+          },
+          "description": "Expected 501 with a valid test token. Must not contact provider or write a financial transaction."
+        },
+        {
+          "name": "Airtime / data / bill payment — expected disabled",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/agency-transactions",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"AIRTIME\",\n  \"amount\": 5000,\n  \"currency\": \"UGX\",\n  \"provider\": \"QUICKTELLER_TEST_ONLY\",\n  \"customerReference\": \"SYNTHETIC-TEST-0770000000\",\n  \"idempotencyKey\": \"postman-vas-safety-001\"\n}"
+            }
+          },
+          "description": "Expected 501 with a valid test token. Synthetic customer reference only; no provider request is made."
+        },
+        {
+          "name": "Retail customer payment — sale posting expected disabled",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/sales",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"postman-retail-payment-safety-001\",\n  \"paymentMethod\": \"QUICKTELLER_TEST_ONLY\",\n  \"items\": []\n}"
+            }
+          },
+          "description": "Expected 501. Sale/payment must not be recorded until checkout verification, stock and ledger atomicity tests pass."
         }
       ]
     }
