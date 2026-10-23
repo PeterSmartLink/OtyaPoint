@@ -48,6 +48,83 @@ paths:
       responses:
         '501':
           description: Sale not recorded; posting is disabled
+  /api/payment-operations:
+    post:
+      summary: Create a local payment operation draft
+      description: |
+        Creates an idempotent DRAFT in Cloudflare D1 and appends an audit event.
+        This route never contacts a provider, creates a provider attempt, or confirms payment.
+        A timeout or ambiguous provider result must be represented as UNKNOWN by a future
+        reviewed adapter and reconciled before another provider attempt.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operationType, amountMinorUnits]
+              properties:
+                operationType:
+                  type: string
+                  enum: [RETAIL_PAYMENT, CASH_IN, CASH_OUT, AIRTIME, DATA, BILL_PAYMENT, FLOAT_PURCHASE, REFUND, REVERSAL]
+                amountMinorUnits:
+                  type: integer
+                  minimum: 1
+                currency:
+                  type: string
+                  enum: [UGX]
+                  default: UGX
+                customerReference:
+                  type: string
+                  maxLength: 120
+                linkedSaleId:
+                  type: string
+                  maxLength: 128
+                selectedProvider:
+                  type: string
+                  enum: [INTERSWITCH, AIRTEL_MONEY, MTN_MOMO]
+                selectedProduct:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Draft created; no provider request was sent
+        '200':
+          description: Matching idempotent draft returned
+        '400':
+          description: Invalid request or missing idempotency key
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role
+        '409':
+          description: Idempotency key reused with different details
+    get:
+      summary: List recent payment operation drafts and statuses
+      description: Manager-only read. Returns up to 100 records and never contacts providers.
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [DRAFT, PENDING, SUCCEEDED, FAILED, UNKNOWN, REVERSED]
+      responses:
+        '200':
+          description: Payment operations
+        '400':
+          description: Invalid status filter
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Manager or higher required
   /api/agency-transactions:
     post:
       summary: Agency and value-added service operation
