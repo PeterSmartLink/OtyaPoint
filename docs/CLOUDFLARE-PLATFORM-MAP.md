@@ -56,8 +56,8 @@ Use Cloudflare service bindings for private Worker-to-Worker calls where suitabl
 
 ### 3. Data layer: choose each service for a reason
 
-- **Supabase/PostgreSQL:** current intended relational source of truth for OmniPoint if the repository’s Prisma/PostgreSQL path is confirmed. Workers can use an approved connection path; evaluate Hyperdrive only after testing compatibility, pooling, TLS and connection limits.
-- **D1:** use for Cloudflare-native, SQLite-compatible bounded datasets or a tested service-owned database. Keep `omnipoint-migration-test` isolated. Prisma/PostgreSQL SQL is not automatically compatible with D1.
+- **OmniPoint operational database:** must be a Cloudflare-owned operational data path; Supabase is NOT OmniPoint's database and must not be configured as its live data source. The existing `omnipoint-migration-test` D1 contains OmniPoint-shaped tables, but its name indicates a test/migration resource. Keep it isolated until ownership, schema/migrations, data contents, bindings and restore behavior are verified; do not silently promote it to production.
+- **D1:** the current OmniPoint schema in D1 must be reconciled with the repository's Prisma/PostgreSQL schema. They are different database engines and differ in types, SQL, transactions and migration tooling. Decide and document the supported Cloudflare-native production database path only after compatibility tests. Hyperdrive is not an OmniPoint/Supabase default and should not be used to reconnect OmniPoint to Supabase.
 - **KV:** suitable for cacheable config, feature/config flags, short-lived lookups or session data where eventual consistency is acceptable. Do not store the only copy of a financial ledger or authorization state requiring immediate revocation.
 - **R2:** large files, media, signed release packages, export files and encrypted backup artifacts where policy allows. Keep private objects private; use short-lived signed access and integrity hashes.
 - **Durable Objects:** introduce only for workloads needing strongly coordinated state, such as per-tenant realtime coordination or serialized job/session state; not as a default database.
@@ -108,7 +108,7 @@ Use Cloudflare service bindings for private Worker-to-Worker calls where suitabl
 |---|---|---|
 | Workers + service bindings | Use / audit existing | API and service runtime |
 | D1 | Limited / compatibility-tested | SQLite workloads; not a blind replacement for Prisma/Postgres |
-| Hyperdrive | Evaluate | May connect Workers to PostgreSQL with pooling |
+| Hyperdrive | Not for OmniPoint by default | Supabase is not OmniPoint's database; only evaluate for a separately approved PostgreSQL workload with an explicit owner |
 | KV | Use selectively | Fast config/cache; eventual consistency caveat |
 | R2 | Use | Media, releases, private exports and permitted backups |
 | Queues + DLQs | Use where asynchronous work exists | Durable delivery and retry isolation |
@@ -165,12 +165,13 @@ Only after reviewed PRs, green CI, preview smoke tests, security review, tested 
 ## Immediate findings to resolve
 
 1. D1 metadata reports `num_tables: 0` for non-empty files; verify actual schema and explain the mismatch.
-2. `otya-store-db` is referenced by both Core and Next; determine table ownership and whether both services truly need direct access.
-3. `otya-release-events` has a producer but no configured consumer in the current queue inventory; confirm whether that is intentional before attaching one.
-4. Worker settings show a mix of ordinary text and secret bindings. Review whether anything sensitive is incorrectly stored as plain text; do not rotate/change values until impact is understood.
-5. Access apps inventory is empty; identify which admin endpoints need identity-aware protection and test a policy before enforcing it.
-6. Pages list request failed because the API rejected the supplied pagination values; verify with documented options rather than assuming no Pages projects exist.
-7. Verify custom Worker routes and zone DNS records separately; the active zone alone does not reveal all routing behavior.
+2. `otya-store-db` is referenced by both Core and Next; its live schema contains media, bot, release, device and notification tables. Determine table ownership and whether both services truly need direct access.
+3. `omnipoint-migration-test` contains OmniPoint-shaped D1 tables even though the D1 list endpoint reports zero tables. Keep it test-only until schema/migration provenance and environment bindings are reconciled; do not treat it as production merely because tables exist.
+4. `otya-release-events` has an R2 producer but no configured queue consumer in the current queue inventory; confirm whether a consumer is intentionally external or missing before attaching one.
+5. Worker settings show a mix of ordinary text and secret bindings. Review whether anything sensitive is incorrectly stored as plain text; do not rotate/change values until impact is understood.
+6. Access apps inventory returned empty; identify which admin endpoints need identity-aware protection and test a policy before enforcing it.
+7. Pages inventory succeeded with valid pagination and returned an empty list for this account. Recheck the dashboard/connected account if the user expects Pages projects elsewhere.
+8. Verify custom Worker routes and zone DNS records separately; the active zone alone does not reveal all routing behavior.
 
 ## Completion criteria
 
