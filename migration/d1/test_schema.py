@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-MIGRATIONS = sorted(Path(__file__).glob("[0-9][0-9][0-9][0-9]_*.sql"))
+MIGRATIONS = sorted(Path(__file__).resolve().parent.glob("[0-9][0-9][0-9][0-9]_*.sql"))
 
 
 def expect_integrity_error(db, sql, params=()):
