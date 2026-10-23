@@ -9,7 +9,28 @@ An isolated Worker + D1 API scaffold for the OmniPoint migration. It is **not pr
 - Business routes require a signed short-lived HMAC bearer token. Without `AUTH_HMAC_SECRET`, they fail closed with `503 auth_not_configured`.
 - The token verification scaffold does not mint tokens, enroll staff, or provide revocation/key rotation. It resolves the verified upstream subject through the D1 `AuthIdentity` link table and then checks the current D1 staff profile. The trusted issuer, link provisioning, revocation/key rotation, and lifecycle are still not implemented. Do not deploy business routes until these are implemented and reviewed.
 - Product reads and manager-only product creation are scaffolded. Sales posting, agency transactions, and reconciliation deliberately return `501` without recording anything until atomic financial behavior, provider adapters, and approval controls are implemented.
+- Savings-group routes cover group/member records, contribution receipt records, loan requests and approvals, and repayment receipt records. Contribution and repayment records stay `PENDING` until balanced ledger posting is implemented; loan disbursement returns `501`. These endpoints are a foundation, not a completed savings/credit accounting system.
+- The ordered D1 migrations live under `migration/d1`: core schema, explicit authentication identity links, then savings groups. Keep the test database isolated.
 - No real data was copied; this change does not deploy a Worker or alter DNS, Vercel, or Supabase.
+
+## Current route behavior
+
+| Method and path | Behavior |
+|---|---|
+| `GET /health` | Read-only D1 health check |
+| `GET/POST /api/products` | Read active products; manager-only atomic product + audit creation |
+| `GET/POST /api/savings-groups` | List/create groups |
+| `GET/POST /api/savings-groups/:id/members` | List/add members to active groups |
+| `GET/POST /api/savings-groups/:id/contributions` | List/record pending contribution receipts; not ledger-posted |
+| `GET/POST /api/savings-groups/:id/loans` | List/request loans |
+| `POST /api/savings-groups/:id/loans/:loanId/approve` | Approve a pending loan request with an audit event |
+| `POST /api/savings-groups/:id/loans/:loanId/reject` | Reject a pending loan request with an audit event |
+| `POST /api/savings-groups/:id/loans/:loanId/disburse` | Deliberately returns `501`; no cash moves |
+| `GET/POST /api/savings-groups/:id/loans/:loanId/repayments` | List/record pending repayment receipts; not ledger-posted |
+| `POST /api/sales` | Deliberately returns `501`; no sale is recorded |
+| `POST /api/agency-transactions` | Deliberately returns `501`; no provider call is made |
+| `GET /api/ledger` | Restricted read-only ledger view |
+| `POST /api/reconciliation` | Deliberately returns `501`; no reconciliation is created |
 
 ## Routes and acceptance gates
 
