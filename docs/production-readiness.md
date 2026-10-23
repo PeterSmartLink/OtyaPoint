@@ -6,8 +6,8 @@ This checklist is intentionally conservative. Do not enable live money movement 
 
 Open the OmniPoint project's Settings → Environment Variables.
 
-- Confirm `DATABASE_URL` has a valid, non-empty PostgreSQL connection string for the OmniPoint Supabase project. Current audit observed the Production variable but its value was empty. Use Supabase Dashboard → Project Settings → Database → Connection string; use the appropriate pooler/direct format for the deployment runtime. Never commit this value or paste it into chat.
-- Add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted/server-only variable for Production. Obtain it from Supabase Dashboard → Project Settings → API Keys (or the project's API keys page). Never use a `NEXT_PUBLIC_` prefix for this secret.
+- Do NOT populate `DATABASE_URL` with a Supabase connection string: Supabase is not OmniPoint's live database. The Cloudflare D1 database `omnipoint-migration-test` is test-only and must not be promoted by changing an environment variable. First approve and validate the production Cloudflare data architecture, then configure only the intended server-side connection/bindings with isolated preview credentials. Keep any existing production value unchanged until its owner and consumers are verified.
+- Do not add a Supabase service-role key for OmniPoint database access. If Supabase Auth is still intentionally used during transition, inventory its public/server settings and confirm the minimum required permissions; do not use it as the business database or expose privileged keys.
 - Keep `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` public values only; they must not contain service-role credentials.
 - Several empty integration-created variables with malformed `NEXT_PUBLIC_...` names were observed. Review their integration ownership before deleting them. Do not use these malformed names in application code.
 - Redeploy after changing environment variables, then verify the deployment and server-side database connectivity.
