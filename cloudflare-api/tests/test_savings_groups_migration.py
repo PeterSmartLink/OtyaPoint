@@ -87,6 +87,38 @@ class SavingsGroupsMigrationTests(unittest.TestCase):
                 VALUES ('r1', 'l1', 10000, 9000, 500, 0, 0, 'repay-idem', 'cashier')"""
             )
 
+    def test_contributions_default_to_pending_until_ledger_posting_exists(self):
+        self.group()
+        self.member()
+        self.db.execute(
+            """INSERT INTO SavingsContribution
+            (id, groupId, memberId, amount, idempotencyKey, receivedById)
+            VALUES ('c1', 'g1', 'm1', 10000, 'idem-pending', 'cashier')"""
+        )
+        self.assertEqual(
+            self.db.execute("SELECT status FROM SavingsContribution WHERE id='c1'").fetchone()[0],
+            "PENDING",
+        )
+
+    def test_repayments_default_to_pending_until_ledger_posting_exists(self):
+        self.group()
+        self.member()
+        self.db.execute(
+            """INSERT INTO SavingsLoan
+            (id, groupId, borrowerMemberId, loanCode, principalAmount, idempotencyKey, createdById)
+            VALUES ('l1', 'g1', 'm1', 'L001', 100000, 'loan-idem', 'admin')"""
+        )
+        self.db.execute(
+            """INSERT INTO SavingsLoanRepayment
+            (id, loanId, amount, principalPortion, interestPortion, feePortion,
+             penaltyPortion, idempotencyKey, receivedById)
+            VALUES ('r1', 'l1', 10000, 10000, 0, 0, 0, 'repay-pending', 'cashier')"""
+        )
+        self.assertEqual(
+            self.db.execute("SELECT status FROM SavingsLoanRepayment WHERE id='r1'").fetchone()[0],
+            "PENDING",
+        )
+
     def test_valid_repayment_is_accepted(self):
         self.group()
         self.member()
