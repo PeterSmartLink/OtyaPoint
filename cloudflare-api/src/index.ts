@@ -49,6 +49,37 @@ async function authenticate(request: Request, env: Env): Promise<Actor | Respons
 const isResponse=(x: Actor|Response): x is Response => x instanceof Response;
 const can=(c:Actor,roles:Role[])=>roles.includes(c.role);
 
+// Read at most the configured number of bytes, even when Content-Length is absent or false.
+async function readBodyLimited(request: Request, maxBytes: number): Promise<string | null> {
+  const declaredLength=request.headers.get("content-length");
+  if(declaredLength!==null) {
+    const parsedLength=Number(declaredLength);
+    if(Number.isFinite(parsedLength)&&parsedLength>maxBytes) return null;
+  }
+  if(!request.body) return "";
+  const reader=request.body.getReader();
+  const chunks:Uint8Array[]=[];
+  let total=0;
+  try {
+    while(true) {
+      const {done,value}=await reader.read();
+      if(done) break;
+      total+=value.byteLength;
+      if(total>maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes=new Uint8Array(total);
+  let offset=0;
+  for(const chunk of chunks) { bytes.set(chunk,offset); offset+=chunk.byteLength; }
+  return new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+}
+
 export default { async fetch(request:Request,env:Env):Promise<Response> {
   const url=new URL(request.url), requestId=request.headers.get("cf-ray")||crypto.randomUUID();
   if(request.method==="GET"&&url.pathname==="/health") {
@@ -92,10 +123,12 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const idempotencyKey=(request.headers.get("idempotency-key")||"").trim();
       if(!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) return json({error:"idempotency_key_required",detail:"Send an Idempotency-Key header between 8 and 128 safe characters."},400);
 
+      const contentType=(request.headers.get("content-type")||"").split(";",1)[0].trim().toLowerCase();
+      if(contentType!=="application/json") return json({error:"content_type_must_be_json"},415);
       let b: Record<string,unknown>;
       try {
-        const raw=await request.text();
-        if(raw.length>16_384) return json({error:"payload_too_large"},413);
+        const raw=await readBodyLimited(request,16_384);
+        if(raw===null) return json({error:"payload_too_large"},413);
         const parsed: unknown=JSON.parse(raw);
         if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)) return json({error:"invalid_json"},400);
         b=parsed as Record<string,unknown>;
