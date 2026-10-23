@@ -24,6 +24,25 @@ Share the documentation text, endpoint paths, non-secret example payloads and sa
 
 Store credentials only as Cloudflare Worker secrets in the isolated test environment when we explicitly prepare the sandbox. Never put them in GitHub source, a Postman collection, a browser environment variable, or chat. Do not set any production secrets or deploy without the owner's explicit approval.
 
+## Server IP Allowed List and Cloudflare
+
+The Airtel portal may require the public source IP for server-to-server collection/disbursement requests. Do not enter the phone's IP, a Cloudflare website/proxy IP, or a guessed address: the allowlist must match the actual outbound source seen by Airtel.
+
+Cloudflare Workers do not provide a dedicated static outbound IP by default. Cloudflare documents dedicated egress IP offerings, but availability and product fit depend on plan/add-on and the exact Worker request path:
+- Cloudflare dedicated egress IPs: https://developers.cloudflare.com/cloudflare-one/traffic-controls/egress-policies/dedicated-egress-ips/
+- Cloudflare dedicated CDN egress behavior for Workers: https://developers.cloudflare.com/smart-shield/configuration/dedicated-egress-ips/other-products/
+
+Before buying anything or configuring a relay, ask Airtel support whether allowlisting is required in UAT/test mode and whether they accept an alternative test arrangement. The logged-in Uganda portal's requirements take precedence over third-party SDK guides.
+
+If a fixed source IP is mandatory and an eligible Cloudflare static-egress product is unavailable or unsuitable, the fallback architecture to evaluate is a small server with a reserved static public IP acting as a tightly restricted outbound relay. Cloudflare Workers and D1 remain OmniPoint's main runtime and database. The relay must:
+- accept requests only from the authenticated OmniPoint Worker using a strong server-to-server signature or mutually authenticated channel;
+- permit only the exact Airtel hostnames and documented API paths, with strict method, payload-size, timeout and rate limits (never a general-purpose proxy);
+- keep Airtel credentials only on the server side and never return them to the browser;
+- log request IDs and redacted outcome metadata, not PINs, access tokens or full sensitive payloads;
+- fail closed when authorization, destination, signature or configuration is invalid.
+
+No IP is known or approved yet. Do not add an IP to Airtel's allowlist until the actual outbound route is provisioned and verified from the server. Keep Airtel calls disabled while this is unresolved.
+
 ## Adapter contract and current behavior
 
 - `cloudflare-api/src/providers/airtel.ts` defines typed operation/config contracts and a fail-closed placeholder.
