@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OmniPoint Single-Business API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     API contract for the owner's own shop. Currency is UGX. This is a development
     scaffold, not a live payment API. Provider operations and financial posting
@@ -48,13 +48,111 @@ paths:
       responses:
         '501':
           description: Sale not recorded; posting is disabled
+  /api/payment-operations:
+    post:
+      summary: Create a local payment operation draft
+      description: |
+        Creates an idempotent DRAFT in Cloudflare D1 and appends an audit event.
+        This route never contacts a provider, creates a provider attempt, or confirms payment.
+        A timeout or ambiguous provider result must be represented as UNKNOWN by a future
+        reviewed adapter and reconciled before another provider attempt.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operationType, amountMinorUnits]
+              properties:
+                operationType:
+                  type: string
+                  enum: [RETAIL_PAYMENT, CASH_IN, CASH_OUT, AIRTIME, DATA, BILL_PAYMENT, FLOAT_PURCHASE, REFUND, REVERSAL]
+                amountMinorUnits:
+                  type: integer
+                  minimum: 1
+                currency:
+                  type: string
+                  enum: [UGX]
+                  default: UGX
+                customerReference:
+                  type: string
+                  maxLength: 120
+                linkedSaleId:
+                  type: string
+                  maxLength: 128
+                selectedProvider:
+                  type: string
+                  enum: [INTERSWITCH, AIRTEL_MONEY, MTN_MOMO]
+                selectedProduct:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Draft created; no provider request was sent
+        '200':
+          description: Matching idempotent draft returned
+        '400':
+          description: Invalid request or missing idempotency key
+        '413':
+          description: Request body exceeds 16 KiB
+        '415':
+          description: Content-Type must be application/json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role
+        '409':
+          description: Idempotency key reused with different details
+    get:
+      summary: List recent payment operation drafts and statuses
+      description: Manager-only read. Returns up to 100 records and never contacts providers.
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [DRAFT, PENDING, SUCCEEDED, FAILED, UNKNOWN, REVERSED]
+      responses:
+        '200':
+          description: Payment operations
+        '400':
+          description: Invalid status filter
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Manager or higher required
   /api/agency-transactions:
     post:
-      summary: Agency transaction
-      description: Intentionally disabled; no provider call or transaction record is made.
+      summary: Agency and value-added service operation
+      description: |
+        Intentionally disabled. Future supported operation types include mobile-money
+        agency, airtime/data, bill payments and float movements. This route currently
+        makes no provider request and records no operation.
       responses:
         '501':
           description: Provider adapter and safety controls required
+  /api/payments/checkout:
+    post:
+      summary: Sale-linked customer payment
+      description: Planned contract only; not implemented. Must use an approved hosted/tokenized checkout and verified status enquiry.
+      responses:
+        '501':
+          description: Checkout is not enabled; no payment was initiated
+  /api/provider-capabilities:
+    get:
+      summary: Read provider capability and operational-state registry
+      description: Manager-only read. Returns configuration metadata only, never credentials, and never contacts a provider.
+      responses:
+        '200':
+          description: Provider capability registry; provider requests remain disabled unless separately approved
   /api/ledger:
     get:
       summary: Read ledger entries
@@ -71,6 +169,16 @@ paths:
         '403':
           description: Manager or higher required
   /api/reconciliation:
+    get:
+      summary: List recent reconciliation runs
+      description: Manager-only read. Returns stored runs; does not create, approve, or post any financial entry.
+      responses:
+        '200':
+          description: Reconciliation runs
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Manager or higher required
     post:
       summary: Create reconciliation
       description: Intentionally disabled until expected balances are ledger-derived and approval controls are tested.
