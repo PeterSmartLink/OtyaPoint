@@ -21,11 +21,6 @@ const manager = (c: SavingsClaims) => ["SOVEREIGN", "MANAGER", "MANAGING_DIRECTO
 const id = () => crypto.randomUUID();
 const str = (v: unknown, max = 160) => typeof v === "string" ? v.trim().slice(0, max) : "";
 const amount = (v: unknown) => Number.isSafeInteger(v) && (v as number) > 0;
-async function audit(env: SavingsEnv, groupId: string, actorId: string, action: string, type: string, entityId: string | null, requestId: string) {
-  await env.DB.prepare(
-    "INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)"
-  ).bind(id(), groupId, actorId, action, type, entityId, requestId).run();
-}
 async function readBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const b = await request.json();
