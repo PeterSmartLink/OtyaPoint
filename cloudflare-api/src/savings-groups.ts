@@ -217,9 +217,10 @@ export async function handleSavingsGroups(
     if (!manager(claims)) return json({ error: "forbidden", requestId }, 403);
     const [, groupIdRaw, loanIdRaw, action] = loanAction;
     const groupId = decodeURIComponent(groupIdRaw), loanId = decodeURIComponent(loanIdRaw);
-    const loan = await env.DB.prepare("SELECT id,status FROM SavingsLoan WHERE id=?1 AND groupId=?2").bind(loanId, groupId).first<{id:string;status:string}>();
+    const loan = await env.DB.prepare("SELECT id,status,createdById FROM SavingsLoan WHERE id=?1 AND groupId=?2").bind(loanId, groupId).first<{id:string;status:string;createdById:string}>();
     if (!loan) return json({ error: "loan_not_found", requestId }, 404);
     if (action === "approve" || action === "reject") {
+      if (loan.createdById === claims.sub) return json({ error: "self_approval_forbidden", requestId }, 403);
       if (loan.status !== "PENDING_APPROVAL") return json({ error: "invalid_loan_transition", status: loan.status, requestId }, 409);
       const nextStatus = action === "approve" ? "APPROVED" : "REJECTED";
       // Conditional update and audit are atomic; a concurrent transition cannot be silently unaudited.
