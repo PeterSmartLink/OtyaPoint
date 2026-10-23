@@ -25,30 +25,8 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Validate migration filenames and unique versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          declare -A seen=()
-          shopt -s nullglob
-          files=(supabase/migrations/*.sql)
-          if (( ${#files[@]} == 0 )); then
-            echo "No SQL migrations found."
-            exit 1
-          fi
-          for file in "${files[@]}"; do
-            name="${file##*/}"
-            if [[ ! "$name" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]]; then
-              echo "Invalid migration filename: $name"
-              exit 1
-            fi
-            version="${name%%_*}"
-            if [[ -n "${seen[$version]:-}" ]]; then
-              echo "Duplicate migration version $version: ${seen[$version]} and $name"
-              exit 1
-            fi
-            seen[$version]="$name"
-          done
+      - name: Validate Cloudflare D1 migration filenames and sequence
+        run: python3 migration/d1/validate_migrations.py
       - name: Test isolated SQLite schema compatibility
         run: python3 migration/d1/test_schema.py
       - name: Test savings-group D1 migration constraints
