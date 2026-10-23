@@ -56,7 +56,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <Link href="/" style={styles.back}><ArrowLeft size={15} /> Back to dashboard</Link>
           <div style={styles.eyebrow}><Boxes size={15} /> OMNIPOINT · RETAIL OPERATIONS</div>
           <h1 style={styles.title}>Inventory workspace</h1>
-          <p style={styles.muted}>Live product records from OmniPoint's database, with auditable stock changes.</p>
+          <p style={styles.muted}>Live product records from OmniPoint&apos;s database, with auditable stock changes.</p>
         </div>
         <div style={styles.livePill}><span style={styles.dot} /> LIVE DATABASE</div>
       </header>
