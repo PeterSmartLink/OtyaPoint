@@ -1,0 +1,77 @@
+# OmniPoint optional Cloudflare binding reference — NOT an active Wrangler config.
+# Every example is commented out intentionally. Do not copy into wrangler.toml or deploy
+# until the resource is approved, provisioned in a non-production environment, tested,
+# and the Worker code includes the corresponding safe usage.
+#
+# Existing root wrangler.toml remains bound only to omnipoint-migration-test.
+# Important: a binding without an ID/name can cause Wrangler to auto-provision a resource
+# on deploy. Keep this reference file inert to prevent accidental resource creation.
+#
+# Official reference: https://developers.cloudflare.com/workers/runtime-apis/bindings/
+# Wrangler reference: https://developers.cloudflare.com/workers/wrangler/configuration/
+#
+# [env.preview]
+# name = "omnipoint-api-preview"
+#
+# # D1 stays the authoritative relational store. Do not replace its existing test binding
+# # in the active config until the dedicated preview database is separately approved.
+# [[env.preview.d1_databases]]
+# binding = "DB"
+# database_name = "omnipoint-preview"
+# database_id = "<APPROVED_NON_PRODUCTION_D1_DATABASE_ID>"
+# migrations_dir = "migration/d1"
+#
+# # KV: cache / non-authoritative flags only. Never store balances, stock truth or roles.
+# [[env.preview.kv_namespaces]]
+# binding = "CACHE"
+# id = "<APPROVED_PREVIEW_KV_NAMESPACE_ID>"
+#
+# # R2: private exports, product images and generated reports. Use private bucket access.
+# [[env.preview.r2_buckets]]
+# binding = "PRIVATE_FILES"
+# bucket_name = "omnipoint-preview-private-files"
+#
+# # Queues: asynchronous notifications, imports and retryable provider events.
+# [[env.preview.queues.producers]]
+# binding = "BACKGROUND_QUEUE"
+# queue = "omnipoint-preview-background"
+#
+# [[env.preview.queues.consumers]]
+# queue = "omnipoint-preview-background"
+# max_batch_size = 10
+# max_batch_timeout = 5
+# max_retries = 3
+# dead_letter_queue = "omnipoint-preview-dead-letter"
+#
+# # Dead-letter queue must be provisioned and monitored separately.
+# [[env.preview.queues.producers]]
+# binding = "DEAD_LETTER_QUEUE"
+# queue = "omnipoint-preview-dead-letter"
+#
+# # Workers AI: optional support/search assistant only. Never authorize a payment or ledger write.
+# [env.preview.ai]
+# binding = "AI"
+#
+# # Analytics Engine: operational metrics without secrets or customer-sensitive payloads.
+# [[env.preview.analytics_engine_datasets]]
+# binding = "METRICS"
+# dataset = "omnipoint_preview_metrics"
+#
+# # Durable Objects: enable only after a real real-time coordination requirement and migration plan.
+# # [[env.preview.durable_objects.bindings]]
+# # name = "TILL_COORDINATOR"
+# # class_name = "TillCoordinator"
+# # A matching class export and migration/tag are also required in Worker code/config.
+#
+# # Workflows: declare only after a WorkflowEntrypoint class is implemented and tested.
+# # [[env.preview.workflows]]
+# # binding = "RECONCILIATION_WORKFLOW"
+# # name = "omnipoint-preview-reconciliation"
+# # class_name = "ReconciliationWorkflow"
+#
+# # Cron: use only for idempotent jobs with a run log, alerting and manual recovery.
+# # [env.preview.triggers]
+# # crons = ["0 2 * * *"]
+#
+# # Secrets are configured separately with Wrangler secrets / dashboard and must never
+# # be placed in this file. Use distinct secrets for preview and production.
