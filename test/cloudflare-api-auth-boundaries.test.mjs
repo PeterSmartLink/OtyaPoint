@@ -169,6 +169,6 @@ test('sale and agency transaction endpoints remain disabled', async t => {
     const response = await worker.fetch(request(path, { method: 'POST', bearer: await token() }), { DB, AUTH_HMAC_SECRET: secret })
     assert.equal(response.status, 501)
     assert.equal(DB.calls.length, 0)
-    assert.equal((await response.json()).error.includes('not_enabled') || true, true)
+    assert.ok(['sales_posting_not_enabled', 'provider_adapter_required', 'reconciliation_not_enabled'].includes((await response.json()).error))
   })
 })
