@@ -3,7 +3,7 @@ name: Verify OmniPoint
 on:
   pull_request:
   push:
-    branches: [main, "work/**"]
+    branches: [main, "work/**", "chore/**", "feat/**"]
 
 permissions:
   contents: read
@@ -13,13 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
+  cloudflare-foundation:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
-      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-real-key
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -29,7 +25,7 @@ jobs:
         run: python3 migration/d1/validate_migrations.py
       - name: Test isolated SQLite schema compatibility
         run: python3 migration/d1/test_schema.py
-      - name: Test savings-group D1 migration constraints
+      - name: Test savings-group migration constraints (legacy feature, scheduled for removal)
         run: python3 -m unittest cloudflare-api.tests.test_savings_groups_migration
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -37,9 +33,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Validate Prisma schema
-        run: npm run db:validate
       - name: Lint
         run: npm run lint
-      - name: Build
+      - name: Build legacy dashboard (migration checkpoint only)
         run: npm run build
