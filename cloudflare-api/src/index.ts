@@ -96,7 +96,9 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       try {
         const raw=await request.text();
         if(raw.length>16_384) return json({error:"payload_too_large"},413);
-        b=JSON.parse(raw) as Record<string,unknown>;
+        const parsed: unknown=JSON.parse(raw);
+        if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)) return json({error:"invalid_json"},400);
+        b=parsed as Record<string,unknown>;
       } catch { return json({error:"invalid_json"},400); }
 
       const allowedTypes=["RETAIL_PAYMENT","CASH_IN","CASH_OUT","AIRTIME","DATA","BILL_PAYMENT","FLOAT_PURCHASE","REFUND","REVERSAL"];
