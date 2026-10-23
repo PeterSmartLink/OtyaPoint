@@ -12,7 +12,7 @@ interface D1Database {
 export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Claims = { sub: string; idp: "supabase"; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
-type Actor = Claims & { role: Role };
+type Actor = Claims & { role: Role; staffId: string };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 const decode = (s: string) => { const x=s.replace(/-/g,"+").replace(/_/g,"/"); return Uint8Array.from(atob(x+"=".repeat((4-x.length%4)%4)),c=>c.charCodeAt(0)); };
 const isRole = (role: unknown): role is Role => ["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"].includes(String(role));
@@ -41,7 +41,7 @@ async function authenticate(request: Request, env: Env): Promise<Actor | Respons
     if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
       return json({error:"staff_access_denied"},403);
     }
-    return { ...claims, role:user.role };
+    return { ...claims, role:user.role, staffId:user.id };
   } catch {
     return json({error:"identity_lookup_unavailable"},503);
   }
@@ -79,13 +79,83 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
         env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)")
           .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice),
         env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,afterState,requestId) VALUES (?1,?2,'CREATE','Product',?3,'Product created through Cloudflare API',?4,?5)")
-          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice}),requestId)
+          .bind(crypto.randomUUID(),auth.staffId,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice}),requestId)
       ]);
       return json({id,sku,name,requestId},201);
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
       return json({error:"sales_posting_not_enabled",detail:"No sale was recorded. Atomic stock, receipt, stock movement and balanced ledger tests are required first."},501);
+    }
+    if(request.method==="POST"&&url.pathname==="/api/payment-operations") {
+      if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      const idempotencyKey=(request.headers.get("idempotency-key")||"").trim();
+      if(!/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) return json({error:"idempotency_key_required",detail:"Send an Idempotency-Key header between 8 and 128 safe characters."},400);
+
+      let b: Record<string,unknown>;
+      try {
+        const raw=await request.text();
+        if(raw.length>16_384) return json({error:"payload_too_large"},413);
+        b=JSON.parse(raw) as Record<string,unknown>;
+      } catch { return json({error:"invalid_json"},400); }
+
+      const allowedTypes=["RETAIL_PAYMENT","CASH_IN","CASH_OUT","AIRTIME","DATA","BILL_PAYMENT","FLOAT_PURCHASE","REFUND","REVERSAL"];
+      const allowedProviders=["INTERSWITCH","AIRTEL_MONEY","MTN_MOMO"];
+      const operationType=typeof b.operationType==="string"?b.operationType:"";
+      const amountMinorUnits=b.amountMinorUnits;
+      const currency=typeof b.currency==="string"?b.currency:"UGX";
+      const customerReference=typeof b.customerReference==="string"?b.customerReference.trim():null;
+      const linkedSaleId=typeof b.linkedSaleId==="string"?b.linkedSaleId.trim():null;
+      const selectedProvider=typeof b.selectedProvider==="string"?b.selectedProvider:null;
+      const selectedProduct=typeof b.selectedProduct==="string"?b.selectedProduct.trim():null;
+      if(!allowedTypes.includes(operationType)||!Number.isSafeInteger(amountMinorUnits)||(amountMinorUnits as number)<=0||
+         currency!=="UGX"||(customerReference!==null&&customerReference.length>120)||
+         (linkedSaleId!==null&&(linkedSaleId.length<1||linkedSaleId.length>128))||
+         (selectedProvider!==null&&!allowedProviders.includes(selectedProvider))||
+         (selectedProduct!==null&&!/^[A-Za-z0-9._-]{1,80}$/.test(selectedProduct))||
+         (selectedProduct!==null&&selectedProvider===null)) return json({error:"invalid_payment_operation"},400);
+
+      // This endpoint creates a local DRAFT only. It never calls a payment provider.
+      const canonical={operationType,amountMinorUnits,currency,customerReference,linkedSaleId,selectedProvider,selectedProduct};
+      const fingerprintBytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify(canonical)));
+      const requestFingerprint=Array.from(new Uint8Array(fingerprintBytes),v=>v.toString(16).padStart(2,"0")).join("");
+      const existing=await env.DB.prepare("SELECT id,operationReference,requestFingerprint,status FROM PaymentOperation WHERE idempotencyKey=?1 LIMIT 1")
+        .bind(idempotencyKey)
+        .first<{id:string;operationReference:string;requestFingerprint:string;status:string}>();
+      if(existing) {
+        if(existing.requestFingerprint!==requestFingerprint) return json({error:"idempotency_conflict",detail:"This idempotency key was already used with different operation details."},409);
+        return json({id:existing.id,operationReference:existing.operationReference,status:existing.status,reused:true,providerRequestSent:false,requestId},200);
+      }
+
+      const id=crypto.randomUUID();
+      const operationReference="OP-"+id.replace(/-/g,"").toUpperCase();
+      try {
+        await env.DB.batch([
+          env.DB.prepare("INSERT INTO PaymentOperation (id,operationReference,operationType,status,selectedProvider,selectedProduct,amountMinorUnits,currency,requestFingerprint,idempotencyKey,customerReference,linkedSaleId,createdById) VALUES (?1,?2,?3,'DRAFT',?4,?5,?6,'UGX',?7,?8,?9,?10,?11)")
+            .bind(id,operationReference,operationType,selectedProvider,selectedProduct,amountMinorUnits,requestFingerprint,idempotencyKey,customerReference,linkedSaleId,auth.staffId),
+          env.DB.prepare("INSERT INTO PaymentOperationEvent (id,operationId,eventType,fromStatus,toStatus,reason,metadata,actorId,requestId) VALUES (?1,?2,'CREATED',NULL,'DRAFT','Local draft created; no provider request was sent',?3,?4,?5)")
+            .bind(crypto.randomUUID(),id,JSON.stringify({operationType,amountMinorUnits,currency,selectedProvider,selectedProduct}),auth.staffId,requestId)
+        ]);
+      } catch(error) {
+        if(error instanceof Error&&error.message.includes("UNIQUE constraint failed")) {
+          const raced=await env.DB.prepare("SELECT id,operationReference,requestFingerprint,status FROM PaymentOperation WHERE idempotencyKey=?1 LIMIT 1")
+            .bind(idempotencyKey).first<{id:string;operationReference:string;requestFingerprint:string;status:string}>();
+          if(raced&&raced.requestFingerprint===requestFingerprint) return json({id:raced.id,operationReference:raced.operationReference,status:raced.status,reused:true,providerRequestSent:false,requestId},200);
+          return json({error:"idempotency_conflict"},409);
+        }
+        throw error;
+      }
+      return json({id,operationReference,status:"DRAFT",reused:false,providerRequestSent:false,requestId},201);
+    }
+    if(request.method==="GET"&&url.pathname==="/api/payment-operations") {
+      if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      const status=url.searchParams.get("status");
+      const allowedStatuses=["DRAFT","PENDING","SUCCEEDED","FAILED","UNKNOWN","REVERSED"];
+      if(status&&!allowedStatuses.includes(status)) return json({error:"invalid_status"},400);
+      const rows=status
+        ? await env.DB.prepare("SELECT id,operationReference,operationType,status,selectedProvider,selectedProduct,amountMinorUnits,currency,customerReference,linkedSaleId,createdAt,updatedAt FROM PaymentOperation WHERE status=?1 ORDER BY createdAt DESC LIMIT 100").bind(status).all()
+        : await env.DB.prepare("SELECT id,operationReference,operationType,status,selectedProvider,selectedProduct,amountMinorUnits,currency,customerReference,linkedSaleId,createdAt,updatedAt FROM PaymentOperation ORDER BY createdAt DESC LIMIT 100").all();
+      return json({data:rows.results,requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/agency-transactions") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
