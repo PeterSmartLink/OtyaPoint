@@ -1,0 +1,182 @@
+{
+  "info": {
+    "_postman_id": "omnipoint-own-business-api",
+    "name": "OmniPoint — Own Business API",
+    "description": "Private API tests for the single-shop OmniPoint system. Use only local Wrangler or an approved test Worker. No live payment calls are enabled.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8787"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "description": "Unauthenticated Worker/D1 health check."
+        }
+      ]
+    },
+    {
+      "name": "Retail",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/products"
+          },
+          "description": "Requires a valid short-lived test token."
+        },
+        {
+          "name": "Create test product",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/products",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"TEST-ITEM-001\",\n  \"name\": \"Test phone case\",\n  \"category\": \"Accessories\",\n  \"costPrice\": 5000,\n  \"sellingPrice\": 8000\n}"
+            }
+          },
+          "description": "Synthetic data only; isolated test D1."
+        },
+        {
+          "name": "Post sale (expected disabled)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/sales",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"postman-test-sale-001\",\n  \"items\": []\n}"
+            }
+          },
+          "description": "Expected 501 until atomic posting tests pass."
+        }
+      ]
+    },
+    {
+      "name": "Agency operations",
+      "item": [
+        {
+          "name": "Create agent operation (planned)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/agency-operations",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-test-agent-op-001"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationType\": \"CASH_IN\",\n  \"channel\": \"CASH\",\n  \"provider\": \"MANUAL_TEST\",\n  \"amount\": 10000,\n  \"commission\": 0,\n  \"currency\": \"UGX\",\n  \"notes\": \"Synthetic test only\"\n}"
+            }
+          },
+          "description": "Planned endpoint. No provider request should be sent."
+        },
+        {
+          "name": "Legacy agency endpoint safety probe",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/agency-transactions",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"CASH_IN\",\n  \"amount\": 10000,\n  \"provider\": \"TEST_ONLY\"\n}"
+            }
+          },
+          "description": "Expected 501; no provider call or transaction record."
+        }
+      ]
+    },
+    {
+      "name": "Reconciliation",
+      "item": [
+        {
+          "name": "Create reconciliation (expected disabled)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/reconciliation",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessDate\": \"2026-10-23\",\n  \"ledgerType\": \"FINTECH_AGENCY\",\n  \"countedCash\": 0,\n  \"countedFloat\": 0,\n  \"notes\": \"Synthetic test only\"\n}"
+            }
+          },
+          "description": "Expected 501 until ledger-derived balances and approval controls are tested."
+        },
+        {
+          "name": "Read agency ledger",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/ledger?type=FINTECH_AGENCY"
+          },
+          "description": "Read-only; requires manager or higher test token."
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('JSON response when body exists', function () { const ct=pm.response.headers.get('Content-Type')||''; if(pm.response.text().length) pm.expect(ct).to.include('application/json'); });"
+        ]
+      }
+    }
+  ]
+}
