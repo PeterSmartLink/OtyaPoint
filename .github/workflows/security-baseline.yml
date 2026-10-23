@@ -1,0 +1,67 @@
+name: Security Baseline
+
+on:
+  pull_request:
+  push:
+    branches: [main, "build/**"]
+  schedule:
+    - cron: "41 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-baseline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-secrets:
+    name: Check tracked files for accidental secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source without a persisted token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Block tracked environment and signing files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '(^|/)(\.env($|\.)|\.dev\.vars$|key\.properties$|keystore\.jks$|.*\.(jks|keystore|p12|pfx|pem|key)$|.*firebase-adminsdk.*\.json$|service-account.*\.json$)' | grep -Ev '(^|/)\.env\.example$'; then
+            echo '::error::Potential secret or signing material is tracked.'
+            exit 1
+          fi
+
+      - name: Block common high-confidence credential patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+          checks=(
+            '^-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----$'
+            '"type"[[:space:]]*:[[:space:]]*"service_account"'
+            '"private_key"[[:space:]]*:[[:space:]]*"-----BEGIN'
+            '[0-9]{8,12}:[A-Za-z0-9_-]{25,}'
+            '\bghp_[A-Za-z0-9]{30,}\b'
+            '\bgithub_pat_[A-Za-z0-9_]{20,}\b'
+            '\bre_[A-Za-z0-9_-]{20,}\b'
+            '\bsk-[A-Za-z0-9_-]{20,}\b'
+          )
+          for pattern in "${checks[@]}"; do
+            if git grep -n -I -E -- "$pattern" -- ':!docs/**' ':!README.md' ':!.github/**'; then
+              echo "::error::Possible committed secret matched a high-confidence pattern: $pattern"
+              exit 1
+            fi
+          done
+
+      - name: Check public environment files for server-only secret names
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -I -E -- 'NEXT_PUBLIC_.*(SERVICE_ROLE|SECRET|PRIVATE_KEY|DATABASE_URL|ACCESS_TOKEN)' -- ':!.env.example'; then
+            echo '::error::A server-only secret appears to use a public NEXT_PUBLIC_ variable.'
+            exit 1
+          fi
