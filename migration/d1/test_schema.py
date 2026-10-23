@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-SCHEMA = Path(__file__).with_name("0001_schema.sql")
+MIGRATIONS = sorted(Path(__file__).glob("[0-9][0-9][0-9][0-9]_*.sql"))
 
 
 def expect_integrity_error(db, sql, params=()):
@@ -23,7 +23,7 @@ def main():
     with tempfile.NamedTemporaryFile(suffix=".sqlite") as tmp:
         db = sqlite3.connect(tmp.name)
         db.execute("PRAGMA foreign_keys = ON")
-        db.executescript(SCHEMA.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:\n            db.executescript(migration.read_text(encoding="utf-8"))
 
         db.execute(
             "INSERT INTO User(id,email,displayName,role,isActive,identityStatus) VALUES (?,?,?,?,?,?)",
@@ -71,11 +71,11 @@ def main():
         assert debit == credit == 150000, (debit, credit)
 
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1\n        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM Product").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AgencyTransaction").fetchone()[0] == 1
         db.close()
-    print("PASS: SQLite schema constraints, FK checks, idempotency uniqueness, and synthetic balanced-ledger fixture")
+    print("PASS: ordered D1 migrations, auth identity linking, schema constraints, FK checks, idempotency uniqueness, and synthetic balanced-ledger fixture")
 
 
 if __name__ == "__main__":
