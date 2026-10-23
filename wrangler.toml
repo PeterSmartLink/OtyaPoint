@@ -1,0 +1,14 @@
+name = "omnipoint-migration-api"
+main = "cloudflare-api/src/index.ts"
+compatibility_date = "2026-10-23"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "omnipoint-migration-test"
+database_id = "43d274ce-d46e-462f-bcef-59b93caefc21"
+migrations_dir = "migration/d1"
+
+# This configuration intentionally points only at the isolated migration-test database.
+# Do not change the binding to production data until authentication, authorization,
+# financial invariants, and cutover checks have been approved and tested.
