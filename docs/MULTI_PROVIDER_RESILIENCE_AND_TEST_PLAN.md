@@ -138,4 +138,15 @@ Public overview pages do not prove that a specific product is approved or availa
 
 ## Current implementation status
 
-Provider modules are deliberately non-operational scaffolds. They perform no provider network requests and cannot create a payment. Local tests and mocked provider behavior must be implemented and pass before sandbox adapters are enabled. Production readiness is not claimed.
+Implemented in the current working branch:
+- D1 schema for provider-neutral payment operations, provider attempts, deduplicated provider events, and append-only operation history.
+- Authenticated `POST /api/payment-operations` to create a local DRAFT and audit event in one D1 batch; it requires an `Idempotency-Key`, fingerprints normalized request fields, rejects key reuse with changed details, and always returns `providerRequestSent: false`.
+- Manager-only `GET /api/payment-operations` for recent local records.
+- Synthetic Postman scenarios for draft creation, idempotent replay, changed-payload conflict, invalid amount, and manager listing. They are prepared but have not yet been executed against a running local Worker.
+- SQLite migration tests for unique operation keys, positive UGX amounts, provider-reference uniqueness, duplicate callback-event rejection, and explicit UNKNOWN state.
+
+Provider modules remain deliberately non-operational scaffolds. They perform no provider network requests and cannot collect, disburse, or confirm a payment. The new payment-operation endpoint creates a local record only; it does not create a provider attempt or post a retail/agency ledger entry. Provider status changes, callbacks, routing/failover, and financial posting remain disabled pending dedicated service-layer tests and official provider contracts.
+
+Authentication migration is not complete: the legacy dashboard still depends on Supabase Auth and Prisma/PostgreSQL, and the Worker currently maps a signed token's Supabase subject to a D1 staff identity. D1 is the intended source of truth for business operations, but the legacy auth/dashboard dependencies must be replaced in a separate reviewed migration before the project can claim a fully Cloudflare-only runtime. Do not remove those dependencies until replacement login, session expiry/revocation, role checks, account recovery, and dashboard data access pass tests.
+
+Production readiness is not claimed. Latest verification has confirmed migration filename sequencing and the isolated SQLite schema test; lint and dashboard build are still pending for the newest worker changes.
