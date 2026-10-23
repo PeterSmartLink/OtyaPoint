@@ -35,6 +35,9 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
 async function groupExists(env: SavingsEnv, groupId: string) {
   return !!await env.DB.prepare("SELECT id FROM SavingsGroup WHERE id=?1").bind(groupId).first();
 }
+async function groupIsActive(env: SavingsEnv, groupId: string) {
+  return !!await env.DB.prepare("SELECT id FROM SavingsGroup WHERE id=?1 AND status='ACTIVE'").bind(groupId).first();
+}
 async function memberExists(env: SavingsEnv, groupId: string, memberId: string) {
   return !!await env.DB.prepare("SELECT id FROM SavingsGroupMember WHERE groupId=?1 AND id=?2 AND status='ACTIVE'").bind(groupId, memberId).first();
 }
@@ -112,6 +115,7 @@ export async function handleSavingsGroups(
     if (!manager(claims)) return json({ error: "forbidden", requestId }, 403);
     const groupId = decodeURIComponent(membersPath[1]);
     if (!await groupExists(env, groupId)) return json({ error: "group_not_found", requestId }, 404);
+    if (!await groupIsActive(env, groupId)) return json({ error: "group_not_active", requestId }, 409);
     const b = await readBody(request);
     if (!b) return json({ error: "invalid_json", requestId }, 400);
     const memberCode = str(b.memberCode, 32).toUpperCase();
@@ -145,6 +149,8 @@ export async function handleSavingsGroups(
   }
   if (contributionsPath && method === "POST") {
     const groupId = decodeURIComponent(contributionsPath[1]);
+    if (!await groupExists(env, groupId)) return json({ error: "group_not_found", requestId }, 404);
+    if (!await groupIsActive(env, groupId)) return json({ error: "group_not_active", requestId }, 409);
     const b = await readBody(request);
     if (!b) return json({ error: "invalid_json", requestId }, 400);
     const memberId = str(b.memberId, 80);
@@ -185,6 +191,7 @@ export async function handleSavingsGroups(
     if (!manager(claims)) return json({ error: "forbidden", requestId }, 403);
     const groupId = decodeURIComponent(loansPath[1]);
     if (!await groupExists(env, groupId)) return json({ error: "group_not_found", requestId }, 404);
+    if (!await groupIsActive(env, groupId)) return json({ error: "group_not_active", requestId }, 409);
     const b = await readBody(request);
     if (!b) return json({ error: "invalid_json", requestId }, 400);
     const borrowerMemberId = str(b.borrowerMemberId, 80);
