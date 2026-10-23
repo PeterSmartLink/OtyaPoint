@@ -7,7 +7,7 @@ An isolated Worker + D1 API scaffold for the OmniPoint migration. It is **not pr
 - Wrangler binds only to `omnipoint-migration-test`, an isolated D1 database.
 - `GET /health` is a read-only database health check.
 - Business routes require a signed short-lived HMAC bearer token. Without `AUTH_HMAC_SECRET`, they fail closed with `503 auth_not_configured`.
-- The token verification scaffold does not mint tokens, enroll staff, or provide revocation/key rotation. Do not deploy business routes until a trusted identity issuer and lifecycle are implemented and reviewed.
+- The token verification scaffold does not mint tokens, enroll staff, or provide revocation/key rotation. It resolves the verified upstream subject through the D1 `AuthIdentity` link table and then checks the current D1 staff profile. The trusted issuer, link provisioning, revocation/key rotation, and lifecycle are still not implemented. Do not deploy business routes until these are implemented and reviewed.
 - Product reads and manager-only product creation are scaffolded. Sales posting, agency transactions, and reconciliation deliberately return `501` without recording anything until atomic financial behavior, provider adapters, and approval controls are implemented.
 - No real data was copied; this change does not deploy a Worker or alter DNS, Vercel, or Supabase.
 
