@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Activity, ArrowLeftRight, Boxes, CheckCircle2, CircleDollarSign, ClipboardList, FileBarChart, Home, Menu, Package, Plus, Search, ShieldCheck, ShoppingCart, Smartphone, Store, Users, Wallet, X } from "lucide-react";
+import { ArrowLeftRight, Boxes, CircleDollarSign, ClipboardList, FileBarChart, Home, Menu, Package, Plus, Search, ShieldCheck, ShoppingCart, Smartphone, Store, Users, Wallet, X } from "lucide-react";
 
 type Page = "Overview" | "Retail POS" | "Inventory" | "Agent desk" | "Cashbook" | "Reconciliation" | "Reports" | "Team";
 type Role = "Owner" | "Cashier" | "Mobile-money agent";
