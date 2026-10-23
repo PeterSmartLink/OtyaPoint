@@ -23,12 +23,25 @@ def main():
     with tempfile.NamedTemporaryFile(suffix=".sqlite") as tmp:
         db = sqlite3.connect(tmp.name)
         db.execute("PRAGMA foreign_keys = ON")
-        for migration in MIGRATIONS:\n            db.executescript(migration.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:
+            db.executescript(migration.read_text(encoding="utf-8"))
 
         db.execute(
             "INSERT INTO User(id,email,displayName,role,isActive,identityStatus) VALUES (?,?,?,?,?,?)",
             ("u1", "manager@example.invalid", "Test Manager", "MANAGER", 1, "VERIFIED"),
         )
+        db.execute(
+            "INSERT INTO AuthIdentity(id,provider,authSubject,userId) VALUES (?,?,?,?)",
+            ("identity-1", "supabase", "synthetic-auth-subject-1", "u1"),
+        )
+
+        # Duplicate upstream subject must not link to another profile.
+        expect_integrity_error(
+            db,
+            "INSERT INTO AuthIdentity(id,provider,authSubject,userId) VALUES (?,?,?,?)",
+            ("identity-2", "supabase", "synthetic-auth-subject-1", "u1"),
+        )
+
         db.execute(
             "INSERT INTO Product(id,sku,name,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?,?,?,?,?,?,?)",
             ("p1", "SKU-TEST-1", "Synthetic phone", 100000, 150000, 5, 1),
@@ -71,7 +84,9 @@ def main():
         assert debit == credit == 150000, (debit, credit)
 
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1\n        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM Product").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AgencyTransaction").fetchone()[0] == 1
         db.close()
