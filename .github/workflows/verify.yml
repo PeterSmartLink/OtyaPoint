@@ -25,8 +25,6 @@ jobs:
         run: python3 migration/d1/validate_migrations.py
       - name: Test isolated SQLite schema compatibility
         run: python3 migration/d1/test_schema.py
-      - name: Test savings-group migration constraints (legacy feature, scheduled for removal)
-        run: python3 -m unittest cloudflare-api.tests.test_savings_groups_migration
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
