@@ -75,10 +75,13 @@ export async function handleSavingsGroups(
     }
     const groupId = id();
     try {
-      await env.DB.prepare(
-        "INSERT INTO SavingsGroup (id,groupCode,name,description,currency,contributionFrequency,shareUnitAmount,createdById) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)"
-      ).bind(groupId, groupCode, name, description, currency, frequency, shareUnitAmount, claims.sub).run();
-      await audit(env, groupId, claims.sub, "CREATE", "SavingsGroup", groupId, requestId);
+      // Keep the business record and its audit event in one D1 transaction.
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO SavingsGroup (id,groupCode,name,description,currency,contributionFrequency,shareUnitAmount,createdById) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
+          .bind(groupId, groupCode, name, description, currency, frequency, shareUnitAmount, claims.sub),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+          .bind(id(), groupId, claims.sub, "CREATE", "SavingsGroup", groupId, requestId)
+      ]);
       return json({ id: groupId, groupCode, name, currency, status: "ACTIVE", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "group_code_conflict", requestId }, 409);
@@ -117,10 +120,13 @@ export async function handleSavingsGroups(
     if (!/^[A-Z0-9_-]{2,32}$/.test(memberCode) || !displayName) return json({ error: "invalid_member", requestId }, 400);
     const memberId = id();
     try {
-      await env.DB.prepare(
-        "INSERT INTO SavingsGroupMember (id,groupId,memberCode,displayName,phone,createdById) VALUES (?1,?2,?3,?4,?5,?6)"
-      ).bind(memberId, groupId, memberCode, displayName, phone, claims.sub).run();
-      await audit(env, groupId, claims.sub, "CREATE", "SavingsGroupMember", memberId, requestId);
+      // Keep the member record and its audit event in one D1 transaction.
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO SavingsGroupMember (id,groupId,memberCode,displayName,phone,createdById) VALUES (?1,?2,?3,?4,?5,?6)")
+          .bind(memberId, groupId, memberCode, displayName, phone, claims.sub),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+          .bind(id(), groupId, claims.sub, "CREATE", "SavingsGroupMember", memberId, requestId)
+      ]);
       return json({ id: memberId, groupId, memberCode, displayName, status: "ACTIVE", requestId }, 201);
     } catch (e) {
       if (e instanceof Error && e.message.includes("UNIQUE")) return json({ error: "member_code_conflict", requestId }, 409);
@@ -210,19 +216,22 @@ export async function handleSavingsGroups(
     const groupId = decodeURIComponent(groupIdRaw), loanId = decodeURIComponent(loanIdRaw);
     const loan = await env.DB.prepare("SELECT id,status FROM SavingsLoan WHERE id=?1 AND groupId=?2").bind(loanId, groupId).first<{id:string;status:string}>();
     if (!loan) return json({ error: "loan_not_found", requestId }, 404);
-    if (action === "approve") {
+    if (action === "approve" || action === "reject") {
       if (loan.status !== "PENDING_APPROVAL") return json({ error: "invalid_loan_transition", status: loan.status, requestId }, 409);
-      await env.DB.prepare("UPDATE SavingsLoan SET status='APPROVED',approvedById=?1,approvedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?2 AND groupId=?3 AND status='PENDING_APPROVAL'").bind(claims.sub, loanId, groupId).run();
-    } else if (action === "reject") {
-      if (loan.status !== "PENDING_APPROVAL") return json({ error: "invalid_loan_transition", status: loan.status, requestId }, 409);
-      await env.DB.prepare("UPDATE SavingsLoan SET status='REJECTED',approvedById=?1,approvedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?2 AND groupId=?3 AND status='PENDING_APPROVAL'").bind(claims.sub, loanId, groupId).run();
+      const nextStatus = action === "approve" ? "APPROVED" : "REJECTED";
+      // Conditional update and audit are atomic; a concurrent transition cannot be silently unaudited.
+      await env.DB.batch([
+        env.DB.prepare("UPDATE SavingsLoan SET status=?1,approvedById=?2,approvedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?3 AND groupId=?4 AND status='PENDING_APPROVAL'")
+          .bind(nextStatus, claims.sub, loanId, groupId),
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+          .bind(id(), groupId, claims.sub, action.toUpperCase(), "SavingsLoan", loanId, requestId)
+      ]);
     } else {
       // Approval is not disbursement. Until a separately authorized, ledger-backed
       // cash workflow exists, fail closed rather than falsely marking a loan paid out.
       if (loan.status !== "APPROVED") return json({ error: "loan_must_be_approved_first", status: loan.status, requestId }, 409);
       return json({ error: "disbursement_not_enabled", detail: "No cash was moved and the loan remains approved; implement audited ledger posting and cash-balance checks first.", requestId }, 501);
     }
-    await audit(env, groupId, claims.sub, action.toUpperCase(), "SavingsLoan", loanId, requestId);
     return json({ id: loanId, status: action === "approve" ? "APPROVED" : "REJECTED", requestId });
   }
 
