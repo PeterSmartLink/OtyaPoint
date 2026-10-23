@@ -101,7 +101,8 @@ test('protected routes reject missing, malformed, expired and wrong-audience tok
     ['malformed token', 'not-a-token'],
     ['expired token', await token({ exp: Math.floor(Date.now() / 1000) - 1 })],
     ['wrong audience', await token({ aud: 'other-api' })],
-    ['wrong issuer', await token({ iss: 'other-issuer' })]
+    ['wrong issuer', await token({ iss: 'other-issuer' })],
+    ['Otya Auth token shape without OmniPoint role and audience is rejected', await token({ role: undefined, iss: undefined, aud: undefined })]
   ]
   for (const [name, bearer] of cases) await t.test(name, async () => {
     const response = await worker.fetch(request('/api/products', { bearer }), { DB: fakeDb(), AUTH_HMAC_SECRET: secret })
