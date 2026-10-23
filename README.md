@@ -1,80 +1,74 @@
 # OmniPoint
 
-OmniPoint is a new, standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
+OmniPoint is a standalone retail and fintech-agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
 
-## Current status
+## Product goal
 
-The repository currently contains a **frontend prototype** with a responsive dashboard, sample inventory, navigation between planned workflows, a demo retail cart selector, a local-only fintech draft form, and a light/dark theme toggle. It is not a production-ready financial system. Sample records are illustrative, and no payment, inventory, ledger, export, EFRIS, or Telegram backend is connected. A Supabase Auth sign-in foundation has been added but still requires environment configuration, staff provisioning, and verification before it can be used.
+Give a small business one simple, reliable workspace for staff, products, stock, sales, cash and float tracking, savings groups, reconciliation, and management reports. Retail commerce and financial-agency records must remain separate.
 
-## Run locally
+## Current engineering status
+
+This repository is under active development and is **not production-ready**. The web dashboard contains prototype/sample data and some draft workflows. A Cloudflare Worker API and D1 migration schema are being built alongside the existing web application. The API currently protects routes with signed bearer-token claims, has product-read/product-create and savings-group routes, and deliberately rejects sales posting, provider transactions, and reconciliation until their accounting and provider safeguards are implemented. A successful build does not prove the service is configured, deployed, or safe for live financial operations.
+
+The savings-group foundation includes groups, members, contributions, loans, repayment allocations, audit events, role checks, and idempotency controls. These features still require end-to-end tests, authorization review, accounting-invariant checks, and operational validation before production use.
+
+## Cloudflare-first target architecture
+
+- **Workers:** API and server-side business logic.
+- **D1:** primary operational database for application records and transactional workflows.
+- **R2:** private documents and receipt/file storage when needed, with access controls.
+- **Queues / Workflows:** retryable background jobs, provider callbacks, notifications, and scheduled processing where appropriate.
+- **Workers observability:** structured logs, request IDs, error monitoring, and alerts.
+- **Vercel:** web frontend hosting if retained; it must call the Cloudflare API rather than use Supabase as the primary application database.
+- **External providers:** MTN, Airtel, EFRIS, and other partners only through approved, isolated adapters and sandbox testing.
+
+This is the target architecture, not a claim that every service is already provisioned or connected. The current `wrangler.toml` intentionally targets an isolated migration-test D1 database. Do not point it at production data until the cutover plan and safety checks are approved.
+
+## Local development
 
 Requirements: Node.js 20.9+ and npm.
 
 ```bash
 npm install
 npm run dev
-```
-
-Open http://localhost:3000.
-
-Build verification:
-
-```bash
 npm run db:validate
 npm run lint
 npm run build
 ```
 
-The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. All four migration filenames match the versions recorded in the connected Supabase project, including the foreign-key index migration applied on 2026-10-17 UTC. Do not rename or edit an applied migration; add a new, later migration for schema changes. Do not rename or edit an applied migration; add a new, later migration for schema changes.
+The repository also includes a D1 schema compatibility test:
 
-## Environment configuration
+```bash
+python3 migration/d1/test_schema.py
+```
 
-Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
+Keep dependency installation reproducible with the committed lockfile and use `npm ci` in CI when the lockfile is valid and current.
 
-## Secure staff onboarding
+## Financial and security rules
 
-- Public self-registration is not available. Only a verified Managing Director or Chairman can invite staff from `/management/staff`.
-- Invitations use Supabase Auth Admin and require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable. Never expose this key with a `NEXT_PUBLIC_` prefix or commit it to Git.
-- New staff profiles are inactive and have `PENDING` identity status. Login is denied until management records identity verification and activates the profile.
-- The unique agent ID is 6–12 uppercase letters/digits (for example, `2IQ35198`). Email and agent ID must both be unique.
-- Verify national ID and required documents through the organization’s approved process. This implementation deliberately does not store raw national ID numbers or identity-document images.
-- The first management administrator must be provisioned manually through the Supabase Dashboard and matching Prisma staff profile, with verified status and active access. Never add a public bootstrap-admin endpoint.
-- Audit events record invitations and approval/rejection decisions. These application controls do not replace independent security review or regulatory/provider approval.
+- Never combine retail sales and fintech-agency transactions into one ledger.
+- Treat amounts as integer minor units where the API schema specifies integers; validate all inputs on the server.
+- Use idempotency keys for retryable financial writes.
+- Never claim a payment succeeded until the relevant provider confirms it.
+- Record auditable actor, action, entity, and request identifiers for sensitive operations.
+- Require least-privilege roles, verified staff accounts, and appropriate second-person approval for high-risk adjustments.
+- Make posted financial records immutable; correct them through explicit reversal/adjustment entries.
+- Calculate expected balances from ledger entries; never accept a client-supplied expected balance as authoritative.
+- Never expose secrets in browser bundles, repository files, logs, or chat.
+- Do not create a public bootstrap-administrator endpoint.
+- Do not enable live money movement until provider approval, reconciliation, idempotency, duplicate-callback handling, and recovery tests pass.
 
-## Required environment variables
+## Delivery priorities
 
-- `DATABASE_URL` — server-side PostgreSQL connection string.
-- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL.
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase publishable/anon key for user sessions.
-- `SUPABASE_SERVICE_ROLE_KEY` — server-only Supabase Admin key, required for invitations; set as an encrypted Vercel environment variable for the required deployment environments.
+1. Resolve CI/build issues and keep security checks green.
+2. Establish Cloudflare D1 schema, migrations, isolated test fixtures, and safe environment separation.
+3. Finish server-side authentication, staff lifecycle, role enforcement, and audit integrity.
+4. Deliver product catalogue, stock movements, and atomic sale/receipt/stock/ledger posting.
+5. Deliver agency cash/float records and reconciliation with approval controls.
+6. Complete savings-group member, contribution, share, loan, disbursement, and repayment workflows with balanced ledgers.
+7. Add reports, export controls, backups, restore drills, observability, and operational runbooks.
+8. Integrate external providers in sandbox mode, then perform independent security and accounting reviews before production.
 
-Never commit environment files or secrets. After changing the Prisma schema, run `npm run db:validate`, `npm run db:generate`, and apply the migration using the approved migration process.
+## Safety boundaries
 
-## Product boundaries
-
-- **Retail ledger:** product sales, inventory, cost of goods sold, and EFRIS invoice metadata.
-- **Fintech agency ledger:** cash-in/out records, float movements, and earned commissions.
-- **Strict separation:** retail sales and agency transactions must never be silently merged.
-- **Auditability:** privileged actions require authorization and leave an audit trail.
-- **Provider truth:** a locally recorded transaction is not represented as successful until the relevant provider confirms it.
-
-## Initial architecture
-
-- Responsive web application for touch-friendly counter use.
-- TypeScript frontend and API boundary.
-- PostgreSQL relational data model (not yet implemented).
-- Role-based access control for attendants, managers, directors, and the root administrator (not yet implemented).
-- Provider adapters for future MTN, Airtel, EFRIS, and Telegram integrations.
-
-## Security and project isolation
-
-This repository is the independent home for OmniPoint. Do not import Otya application code, databases, credentials, or production configuration. Never commit real credentials. Financial transaction execution, EFRIS compliance, and telecom integrations require approved access, provider-specific implementation, and verification before production use.
-
-## Planned delivery sequence
-
-1. Foundation, environment configuration, and security boundaries.
-2. Authentication, users, roles, and audit events.
-3. Retail catalog, inventory, and POS.
-4. Fintech agency ledger and reconciliation.
-5. Reports, exports, and management dashboards.
-6. Provider integrations, automated tests, and deployment hardening.
+Development changes must stay on a feature branch until reviewed. Do not merge pull requests, deploy production, migrate or delete existing data, change secrets, or enable live payments without explicit approval. Never reuse credentials, databases, or production configuration from other projects.
