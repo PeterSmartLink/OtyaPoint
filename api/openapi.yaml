@@ -146,13 +146,13 @@ paths:
       responses:
         '501':
           description: Checkout is not enabled; no payment was initiated
-  /api/provider/capabilities:
+  /api/provider-capabilities:
     get:
-      summary: Planned provider capability registry
-      description: Planned contract only; must report configured sandbox capabilities without exposing credentials.
+      summary: Read provider capability and operational-state registry
+      description: Manager-only read. Returns configuration metadata only, never credentials, and never contacts a provider.
       responses:
-        '501':
-          description: Provider capability registry is not implemented
+        '200':
+          description: Provider capability registry; provider requests remain disabled unless separately approved
   /api/ledger:
     get:
       summary: Read ledger entries
@@ -169,6 +169,16 @@ paths:
         '403':
           description: Manager or higher required
   /api/reconciliation:
+    get:
+      summary: List recent reconciliation runs
+      description: Manager-only read. Returns stored runs; does not create, approve, or post any financial entry.
+      responses:
+        '200':
+          description: Reconciliation runs
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Manager or higher required
     post:
       summary: Create reconciliation
       description: Intentionally disabled until expected balances are ledger-derived and approval controls are tested.
