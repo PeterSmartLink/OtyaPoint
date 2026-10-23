@@ -131,6 +131,46 @@ def main():
             ("pay-event-1", "pay-1", "STATUS_CHANGED", "PENDING", "UNKNOWN", "Synthetic timeout; provider status enquiry required", "u1"),
         )
 
+        # Provider capability is disabled by default; production cannot be marked READY.
+        db.execute(
+            "INSERT INTO ProviderCapability(id,provider,product,environment) VALUES (?,?,?,?)",
+            ("cap-1", "AIRTEL_MONEY", "COLLECTION", "SANDBOX"),
+        )
+        assert db.execute("SELECT operationalState FROM ProviderCapability WHERE id='cap-1'").fetchone()[0] == "DISABLED"
+        expect_integrity_error(
+            db,
+            "INSERT INTO ProviderCapability(id,provider,product,environment,operationalState) VALUES (?,?,?,?,?)",
+            ("cap-prod-bad", "AIRTEL_MONEY", "COLLECTION", "PRODUCTION", "READY"),
+        )
+
+        # Reconciliation is append-oriented, has explicit differences, and separates maker/checker.
+        db.execute(
+            "INSERT INTO ReconciliationRun(id,reference,scope,periodStart,periodEnd,createdById) VALUES (?,?,?,?,?,?)",
+            ("rec-1", "REC-TEST-1", "PROVIDER_SETTLEMENT", "2026-10-01", "2026-10-02", "u1"),
+        )
+        expect_integrity_error(
+            db,
+            "INSERT INTO ReconciliationRun(id,reference,scope,periodStart,periodEnd,createdById,approvedById) VALUES (?,?,?,?,?,?,?)",
+            ("rec-bad", "REC-TEST-BAD", "RETAIL", "2026-10-01", "2026-10-02", "u1", "u1"),
+        )
+        db.execute(
+            "INSERT INTO ReconciliationItem(id,runId,sourceType,sourceId,discrepancyType,expectedAmount,observedAmount) VALUES (?,?,?,?,?,?,?)",
+            ("rec-item-1", "rec-1", "PROVIDER", "provider-ref-test-1", "AMOUNT_MISMATCH", 10000, 9000),
+        )
+        expect_integrity_error(
+            db,
+            "INSERT INTO ReconciliationItem(id,runId,sourceType,sourceId,discrepancyType,expectedAmount,observedAmount) VALUES (?,?,?,?,?,?,?)",
+            ("rec-item-2", "rec-1", "PROVIDER", "provider-ref-test-1", "AMOUNT_MISMATCH", 10000, 9000),
+        )
+        expect_integrity_error(
+            db,
+            "UPDATE LedgerEntry SET description='rewritten ledger' WHERE id='l1'",
+        )
+        expect_integrity_error(
+            db,
+            "DELETE FROM LedgerEntry WHERE id='l1'",
+        )
+
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
