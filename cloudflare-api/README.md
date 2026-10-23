@@ -23,8 +23,8 @@ An isolated Worker + D1 API scaffold for the OmniPoint migration. It is **not pr
 | `GET/POST /api/savings-groups/:id/members` | List/add members to active groups |
 | `GET/POST /api/savings-groups/:id/contributions` | List/record pending contribution receipts; not ledger-posted |
 | `GET/POST /api/savings-groups/:id/loans` | List/request loans |
-| `POST /api/savings-groups/:id/loans/:loanId/approve` | Approve a pending loan request with an audit event |
-| `POST /api/savings-groups/:id/loans/:loanId/reject` | Reject a pending loan request with an audit event |
+| `POST /api/savings-groups/:id/loans/:loanId/approve` | Approve a pending loan request with an audit event; requester cannot approve their own loan |
+| `POST /api/savings-groups/:id/loans/:loanId/reject` | Reject a pending loan request with an audit event; requester cannot act as their own approver |
 | `POST /api/savings-groups/:id/loans/:loanId/disburse` | Deliberately returns `501`; no cash moves |
 | `GET/POST /api/savings-groups/:id/loans/:loanId/repayments` | List/record pending repayment receipts; not ledger-posted |
 | `POST /api/sales` | Deliberately returns `501`; no sale is recorded |
