@@ -1,0 +1,21 @@
+name: Relay HMAC unit tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, "feat/**", "work/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  relay-auth-tests:
+    name: Synthetic relay authentication tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run relay HMAC tests
+        run: node --test infra/aws-egress-relay/src/auth.test.mjs
