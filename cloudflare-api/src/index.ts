@@ -88,6 +88,16 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
   }
   const auth=await authenticate(request,env); if(isResponse(auth)) return auth;
   try {
+    if(request.method==="GET"&&url.pathname==="/api/provider-capabilities") {
+      if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      const rows=await env.DB.prepare("SELECT id,provider,product,environment,operationalState,capabilities,reason,updatedAt FROM ProviderCapability ORDER BY provider,product,environment LIMIT 100").all();
+      return json({data:rows.results,providerRequestsEnabled:false,requestId});
+    }
+    if(request.method==="GET"&&url.pathname==="/api/reconciliation") {
+      if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      const rows=await env.DB.prepare("SELECT id,reference,scope,provider,periodStart,periodEnd,status,expectedTotal,observedTotal,currency,createdAt,updatedAt FROM ReconciliationRun ORDER BY createdAt DESC LIMIT 100").all();
+      return json({data:rows.results,postingEnabled:false,requestId});
+    }
     if(request.method==="GET"&&url.pathname==="/api/products") {
       const rows=await env.DB.prepare("SELECT id,sku,name,description,category,sellingPrice,quantityOnHand,reorderLevel,isActive FROM Product WHERE isActive=1 ORDER BY name LIMIT 200").all();
       return json({data:rows.results,requestId});
