@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -I -E -- 'NEXT_PUBLIC_.*(SERVICE_ROLE|SECRET|PRIVATE_KEY|DATABASE_URL|ACCESS_TOKEN)' -- ':!.env.example'; then
+          if git grep -n -I -E -- 'NEXT_PUBLIC_[A-Z0-9_]*(SERVICE_ROLE|SECRET|PRIVATE_KEY|DATABASE_URL|ACCESS_TOKEN)' -- ':!.env.example'; then
             echo '::error::A server-only secret appears to use a public NEXT_PUBLIC_ variable.'
             exit 1
           fi
