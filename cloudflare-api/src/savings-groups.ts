@@ -220,12 +220,17 @@ export async function handleSavingsGroups(
       if (loan.status !== "PENDING_APPROVAL") return json({ error: "invalid_loan_transition", status: loan.status, requestId }, 409);
       const nextStatus = action === "approve" ? "APPROVED" : "REJECTED";
       // Conditional update and audit are atomic; a concurrent transition cannot be silently unaudited.
-      await env.DB.batch([
+      const results = await env.DB.batch([
         env.DB.prepare("UPDATE SavingsLoan SET status=?1,approvedById=?2,approvedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now'),updatedAt=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?3 AND groupId=?4 AND status='PENDING_APPROVAL'")
           .bind(nextStatus, claims.sub, loanId, groupId),
-        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+        // D1 batch statements run sequentially in one transaction; write audit only if the conditional update changed a row.
+        env.DB.prepare("INSERT INTO SavingsGroupAuditEvent (id,groupId,actorId,action,entityType,entityId,requestId) SELECT ?1,?2,?3,?4,?5,?6,?7 WHERE changes()=1")
           .bind(id(), groupId, claims.sub, action.toUpperCase(), "SavingsLoan", loanId, requestId)
       ]);
+      const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+      if (updateResult?.meta?.changes !== 1) {
+        return json({ error: "invalid_loan_transition", requestId }, 409);
+      }
     } else {
       // Approval is not disbursement. Until a separately authorized, ledger-backed
       // cash workflow exists, fail closed rather than falsely marking a loan paid out.
