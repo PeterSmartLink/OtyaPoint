@@ -13,7 +13,7 @@
 
 This branch introduces a database-backed inventory workspace at `/inventory`.
 
-- Reads active products from the existing Prisma/Supabase PostgreSQL database.
+- The current implementation was originally wired to Prisma/PostgreSQL; that connection must not be assumed to be Supabase or promoted as OmniPoint's live data path. The Cloudflare D1 bridge is a separate test-only scaffold until the approved Cloudflare database path and auth integration are complete.
 - Allows authorized managers and senior management to create products.
 - Records opening stock as a stock movement.
 - Allows authorized staff to adjust stock with a required reason.
