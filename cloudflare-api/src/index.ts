@@ -5,30 +5,50 @@ interface D1Statement {
   all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
   run(): Promise<unknown>;
 }
-interface D1Database { prepare(query: string): D1Statement }
-
+interface D1Database {
+  prepare(query: string): D1Statement;
+  batch<T = unknown>(statements: D1Statement[]): Promise<T[]>;
+}
 export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Claims = { sub: string; role: Role; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
+type Claims = { sub: string; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
+type Actor = Claims & { role: Role };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 const decode = (s: string) => { const x=s.replace(/-/g,"+").replace(/_/g,"/"); return Uint8Array.from(atob(x+"=".repeat((4-x.length%4)%4)),c=>c.charCodeAt(0)); };
-async function authenticate(request: Request, env: Env): Promise<Claims | Response> {
+const isRole = (role: unknown): role is Role => ["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"].includes(String(role));
+
+async function authenticate(request: Request, env: Env): Promise<Actor | Response> {
   if (!env.AUTH_HMAC_SECRET) return json({ error: "auth_not_configured" }, 503);
   const token=(request.headers.get("authorization")||"").replace(/^Bearer /,"");
-  const p=token.split("."); if(p.length!==3) return json({error:"unauthorized"},401);
+  const p=token.split(".");
+  if(p.length!==3) return json({error:"unauthorized"},401);
+
+  let claims: Claims;
   try {
     const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.AUTH_HMAC_SECRET),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
     if(!await crypto.subtle.verify("HMAC",key,decode(p[2]),new TextEncoder().encode(p[0]+"."+p[1]))) return json({error:"unauthorized"},401);
-    const c=JSON.parse(new TextDecoder().decode(decode(p[1]))) as Claims;
-    if(!c.sub||!Number.isFinite(c.exp)||c.exp<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api"||!["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"].includes(c.role)) return json({error:"unauthorized"},401);
-    return c;
+    const c=JSON.parse(new TextDecoder().decode(decode(p[1]))) as Partial<Claims>;
+    if(typeof c.sub!=="string"||!c.sub||!Number.isFinite(c.exp)||Number(c.exp)<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api") return json({error:"unauthorized"},401);
+    claims = { sub:c.sub, exp:Number(c.exp), iss:"omnipoint", aud:"omnipoint-api" };
   } catch { return json({error:"unauthorized"},401); }
+
+  // Never trust a role embedded in a token as the current authorization source.
+  // Resolve active staff status and role from the D1 profile on every request.
+  try {
+    const user = await env.DB.prepare("SELECT id,role,isActive,identityStatus FROM User WHERE id=?1 LIMIT 1")
+      .bind(claims.sub)
+      .first<{id:string;role:string;isActive:number;identityStatus:string}>();
+    if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
+      return json({error:"staff_access_denied"},403);
+    }
+    return { ...claims, role:user.role };
+  } catch {
+    return json({error:"identity_lookup_unavailable"},503);
+  }
 }
-const isResponse=(x: Claims|Response): x is Response => x instanceof Response;
-const can=(c:Claims,roles:Role[])=>roles.includes(c.role);
-async function audit(env:Env,actor:string,action:string,type:string,id:string|null,requestId:string) {
-  await env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,requestId) VALUES (?1,?2,?3,?4,?5,?6)").bind(crypto.randomUUID(),actor,action,type,id,requestId).run();
-}
+const isResponse=(x: Actor|Response): x is Response => x instanceof Response;
+const can=(c:Actor,roles:Role[])=>roles.includes(c.role);
+
 export default { async fetch(request:Request,env:Env):Promise<Response> {
   const url=new URL(request.url), requestId=request.headers.get("cf-ray")||crypto.randomUUID();
   if(request.method==="GET"&&url.pathname==="/health") {
@@ -43,11 +63,25 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
     }
     if(request.method==="POST"&&url.pathname==="/api/products") {
       if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
-      const b=await request.json() as Record<string,unknown>, sku=typeof b.sku==="string"?b.sku.trim():"", name=typeof b.name==="string"?b.name.trim():"";
-      if(!sku||!name||!Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||!Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
+      const b=await request.json() as Record<string,unknown>;
+      const sku=typeof b.sku==="string"?b.sku.trim().toUpperCase():"";
+      const name=typeof b.name==="string"?b.name.trim():"";
+      const description=typeof b.description==="string"?b.description.trim():null;
+      const category=typeof b.category==="string"?b.category.trim():null;
+      if(!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(sku)||name.length<2||name.length>120||
+         (description!==null&&description.length>1000)||(category!==null&&category.length>80)||
+         !Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||
+         !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
+
       const id=crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)").bind(id,sku,name,typeof b.description==="string"?b.description:null,typeof b.category==="string"?b.category:null,b.costPrice,b.sellingPrice).run();
-      await audit(env,auth.sub,"CREATE","Product",id,requestId); return json({id,sku,name},201);
+      // D1 batch is used so the product and its audit event commit together or not at all.
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)")
+          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice),
+        env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,afterState,requestId) VALUES (?1,?2,'CREATE','Product',?3,'Product created through Cloudflare API',?4,?5)")
+          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice}),requestId)
+      ]);
+      return json({id,sku,name,requestId},201);
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
@@ -59,7 +93,7 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
     }
     if(request.method==="GET"&&url.pathname==="/api/ledger") {
       if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
-      const type=url.searchParams.get("type"); if(type&&!["RETAIL","FINTECH_AGENCY"].includes(type)) return json({error:"invalid_ledger_type"},400);
+      const type=url.searchParams.get("type"); if(type&&!("RETAIL FINTECH_AGENCY".split(" ").includes(type))) return json({error:"invalid_ledger_type"},400);
       const rows=type?await env.DB.prepare("SELECT id,ledgerType,accountCode,currency,debit,credit,sourceType,sourceId,description,effectiveAt,createdAt FROM LedgerEntry WHERE ledgerType=?1 ORDER BY effectiveAt DESC LIMIT 500").bind(type).all():await env.DB.prepare("SELECT id,ledgerType,accountCode,currency,debit,credit,sourceType,sourceId,description,effectiveAt,createdAt FROM LedgerEntry ORDER BY effectiveAt DESC LIMIT 500").all();
       return json({data:rows.results,requestId});
     }
