@@ -1,5 +1,5 @@
 name = "omnipoint-migration-api"
-main = "src/index.ts"
+main = "cloudflare-api/src/index.ts"
 compatibility_date = "2026-10-23"
 workers_dev = true
 
