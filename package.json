@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate:dev": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "test:cloudflare-api": "node --test test/cloudflare-api-auth-boundaries.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
