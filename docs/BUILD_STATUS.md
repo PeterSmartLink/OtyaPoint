@@ -22,6 +22,13 @@ This branch introduces a database-backed inventory workspace at `/inventory`.
 - Does not create retail sales, execute mobile-money transactions, post ledger entries, or call EFRIS.
 - Uses existing tables and requires no database migration.
 
+## Safe preview without production data
+
+- `/preview` is a Vercel Preview-only, read-only inventory showcase using fictional sample data hard-coded in the page.
+- It does not call Prisma, Supabase, staff authentication, or any write action; it is not an operational route.
+- The page checks `VERCEL_ENV === "preview"`. On non-preview deployments it shows a restricted message instead of demo inventory.
+- Do not add production `DATABASE_URL` to Preview just to make the demo work. Real inventory at `/inventory` remains staff-protected and requires a separately approved non-production database for interactive testing.
+
 ## Important verification
 
 - This branch must pass the existing GitHub Actions checks before it is merged.
