@@ -11,7 +11,7 @@ interface D1Database {
 }
 export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Claims = { sub: string; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
+type Claims = { sub: string; idp: "supabase"; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
 type Actor = Claims & { role: Role };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 const decode = (s: string) => { const x=s.replace(/-/g,"+").replace(/_/g,"/"); return Uint8Array.from(atob(x+"=".repeat((4-x.length%4)%4)),c=>c.charCodeAt(0)); };
@@ -28,15 +28,15 @@ async function authenticate(request: Request, env: Env): Promise<Actor | Respons
     const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.AUTH_HMAC_SECRET),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
     if(!await crypto.subtle.verify("HMAC",key,decode(p[2]),new TextEncoder().encode(p[0]+"."+p[1]))) return json({error:"unauthorized"},401);
     const c=JSON.parse(new TextDecoder().decode(decode(p[1]))) as Partial<Claims>;
-    if(typeof c.sub!=="string"||!c.sub||!Number.isFinite(c.exp)||Number(c.exp)<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api") return json({error:"unauthorized"},401);
-    claims = { sub:c.sub, exp:Number(c.exp), iss:"omnipoint", aud:"omnipoint-api" };
+    if(typeof c.sub!=="string"||!c.sub||c.idp!=="supabase"||!Number.isFinite(c.exp)||Number(c.exp)<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api") return json({error:"unauthorized"},401);
+    claims = { sub:c.sub, idp:"supabase", exp:Number(c.exp), iss:"omnipoint", aud:"omnipoint-api" };
   } catch { return json({error:"unauthorized"},401); }
 
   // Never trust a role embedded in a token as the current authorization source.
   // Resolve active staff status and role from the D1 profile on every request.
   try {
-    const user = await env.DB.prepare("SELECT id,role,isActive,identityStatus FROM User WHERE id=?1 LIMIT 1")
-      .bind(claims.sub)
+    const user = await env.DB.prepare("SELECT u.id,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
+      .bind(claims.idp,claims.sub)
       .first<{id:string;role:string;isActive:number;identityStatus:string}>();
     if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
       return json({error:"staff_access_denied"},403);
