@@ -22,9 +22,9 @@ The core schema and additive company-scope migration were applied to the isolate
 
 ## Authentication boundary
 
-Business routes pass the caller's Otya access token to the existing `otya-auth` Worker using a Cloudflare service binding and accept the identity only when `/auth/verify` returns a verified user ID. OmniPoint then looks up an active local staff membership and role in its own D1 database. A global Otya login does not itself grant OmniPoint access, and browser-supplied roles are never trusted.
+Business routes require a short-lived HMAC-SHA256 JWT issued by the trusted server-side web bridge. The Worker verifies the signature, issuer, audience and expiry using the `OMNIPOINT_API_HMAC_SECRET` Worker secret, then loads an active local staff membership and role from D1. Token role claims are informational only. The browser never receives the signing secret.
 
-The production Wrangler config contains the service binding but has not been deployed by this branch. The dashboard is not yet wired to pass the current Otya access token to this API, and staff onboarding/provisioning is not complete. No public bootstrap-admin route exists. Do not enable business routes until token verification, staff onboarding, owner recovery and authorization tests are reviewed.
+This is a transitional compatibility adapter for the existing web login; it is not yet the shared Otya Auth login flow. The production Wrangler config has not been deployed and no Worker secret has been configured by this branch. Staff onboarding/provisioning is incomplete. No public bootstrap-admin route exists. Do not enable business routes until the bridge, staff mapping, owner recovery and authorization tests are reviewed.
 
 ## Validation
 
