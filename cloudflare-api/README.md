@@ -12,12 +12,12 @@ The core schema and additive company-scope migration were applied to the isolate
 
 ## API surface
 
-- `GET /health`: schema readiness only; does not reveal table names or business data.
+- `GET /health`: checks the required tables and API-consumed columns, including company scope, staff profile fields and immutable ledger journals; it does not reveal table names or business data.
 - `GET /api/me`: verified Otya identity mapped to the active local OmniPoint staff membership; returns only the staff profile needed by the workspace.
 - `GET /api/products`: authenticated inventory read.
 - `POST /api/products`: manager-authorized product creation, with audit record.
 - `POST /api/stock-adjustments`: manager-authorized audited movement; D1 triggers enforce quantity invariants.
-- `POST /api/sales`: cash-only retail sale. Requires an idempotency-key header. Every read and write is scoped to the authenticated staff member's `company_id`; the sale, lines, stock movements, balanced retail ledger entries and audit record are submitted in one D1 batch; database triggers reject insufficient stock and cross-company product use.
+- `POST /api/sales`: cash-only retail sale. Requires an idempotency-key header. Every read and write is scoped to the authenticated staff member's `company_id`; the sale, lines, stock movements, balanced retail ledger journals and audit record are submitted in one D1 batch. Database triggers reject insufficient stock, cross-company product use, unbalanced journal posting and edits to posted journal entries.
 - `GET /api/summary` and `GET /api/ledger`: manager-authorized views.
 - `POST /api/agency-transactions`: deliberately disabled with HTTP 501. No provider call is made and no transaction is represented as successful.
 
