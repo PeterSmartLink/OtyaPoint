@@ -4,6 +4,8 @@
 
 This contract defines how OmniPoint relates to Otya products without merging their data, permissions, or production risk. It is the source-of-truth boundary for implementation work across the PeterSmart Link / Otya ecosystem.
 
+The ecosystem-wide product inventory and shared release rules are being centralized in [Otya Server PR #213](https://github.com/PeterSmartLink/Otya-Server/pull/213). Keep this contract focused on OmniPoint-specific ownership and API behavior; do not create a second competing product registry. Once the central registry is approved, its machine-readable entries become the common inventory and this file remains the detailed OmniPoint integration contract.
+
 ## System map
 
 - **Otya Auth (otya-auth)** — shared identity verification only. A successful login does not automatically grant access to any product or business.
