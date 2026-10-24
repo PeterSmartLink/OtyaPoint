@@ -12,6 +12,15 @@
 - [ ] Verify the current D1 schemas using read-only introspection and update the resource inventory. The previous statement that production D1 has zero tables was incorrect.
 - [ ] Confirm the dedicated OmniPoint Worker is absent or present through a fresh inventory; do not infer deployment from the config file.
 
+## Current API capability snapshot (source review; not a production readiness claim)
+
+Implemented in the Worker source on this branch:
+- `GET /api/me`, `GET /api/products`, `GET /api/summary`, and `GET /api/ledger`.
+- `POST /api/products`, `POST /api/stock-adjustments`, and `POST /api/sales` (cash-only; idempotency key required; stock, retail ledger and audit writes are batched).
+- `POST /api/agency-transactions` intentionally returns `501 provider_adapter_required`; it does not call a provider or record an agency transaction.
+
+Not yet implemented as end-to-end business flows: purchasing/supplier receiving, expenses, cash drawer opening/closing, returns/refunds, reconciliation approvals, EFRIS integration, and a real mobile-money/provider adapter. These must be built and tested before claiming full shop/agency operations. Source presence does not mean the Worker is deployed or safe to expose; production schema and identity integration remain release blockers.
+
 ## Stage 0 — Isolated foundation
 
 - [x] Dedicated OmniPoint D1, R2, KV and queue resources provisioned.
@@ -34,9 +43,9 @@
 
 ## Stage 2 — Retail inventory and POS
 
-- [ ] Product/SKU create, update, deactivate and read endpoints.
-- [ ] Opening stock and adjustment endpoints with mandatory reason and before/after audit data.
-- [ ] Atomic sale posting: receipt, sale lines, stock deduction, stock movements, balanced retail ledger and audit record in one transaction/batch.
+- [x] Product/SKU create and read endpoints exist in Worker source; update and deactivate endpoints remain missing. Production release remains blocked.
+- [ ] Opening stock and adjustment flows: adjustment exists in Worker source with a reason and audit before/after; opening-stock/purchase receiving flow and deployed-schema verification remain missing.
+- [x] Cash sale posting code batches receipt, lines, stock deduction, balanced retail ledger entries and audit record; still needs clean-schema, concurrency, rollback and production-like integration tests.
 - [ ] Duplicate request and duplicate receipt tests.
 - [ ] Insufficient stock, inactive product, malformed amount, concurrency and rollback tests.
 - [ ] Returns/refunds are compensating entries, never edits to historical ledger rows.
