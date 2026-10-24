@@ -103,6 +103,19 @@ export default {
     if (isResponse(staff)) return staff;
 
     try {
+      if (request.method === "GET" && url.pathname === "/api/me") {
+        return json({
+          data: {
+            id: staff.id,
+            companyId: staff.company_id,
+            branchId: staff.branch_id,
+            role: staff.role,
+            status: staff.status
+          },
+          requestId: rid
+        });
+      }
+
       if (request.method === "GET" && url.pathname === "/api/products") {
         const result = await env.DB.prepare(
           "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 ORDER BY name LIMIT 500"
