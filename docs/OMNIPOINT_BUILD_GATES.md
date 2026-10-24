@@ -4,7 +4,9 @@
 
 ## Immediate release blockers from the 2026-10-24 read-only audit
 
-- [ ] Reconcile the production D1 schema with reviewed migration files. Production currently lacks `company_id` on several operational tables that have it in the migration-test schema.
+- [ ] Reconcile production D1 with reviewed migrations. Read-only introspection confirms production lacks `company_id` on products, sales, stock movements, agency transactions, ledger entries, reconciliation sessions and audit events.
+- [ ] Establish migration history. Production has no `d1_migrations` table; test records only `0001_core.sql` and `0002_company_scope.sql` even though staff-profile columns already exist there. Do not infer migration state from columns alone.
+- [ ] Reconcile staff schema drift. Test has `display_name`, `email`, `agent_id`, `identity_status`, `phone`, `approved_by` and `approved_at`; the reviewed `0003_staff_profile.sql` defines only the first three. Decide which fields are required and make the migration chain reproduce the intended schema from empty D1.
 - [ ] Clean up the migration-test baseline or document its legacy schema explicitly. It contains old Prisma-style tables alongside the new `omni_*` schema.
 - [ ] Review every protected API query and write for server-derived company and branch scoping. Prove tenant isolation with adversarial tests.
 - [ ] Verify the current D1 schemas using read-only introspection and update the resource inventory. The previous statement that production D1 has zero tables was incorrect.
@@ -16,7 +18,7 @@
 - [x] Separate OmniPoint migration-test D1 exists.
 - [x] Existing Otya resources inventoried and protected from reuse.
 - [ ] Dedicated OmniPoint Worker configuration and schema reviewed.
-- [ ] Production/test schema parity and migration order reconciled.
+- [ ] Production/test schema parity and migration order reconciled, including explicit migration-history strategy.
 - [ ] Contract tests run against a clean isolated test database.
 - [ ] No production route or custom domain attached until release gates pass.
 
