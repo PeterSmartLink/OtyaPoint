@@ -35,4 +35,4 @@ python3 cloudflare-api/tests/test_core_schema.py
 npx wrangler dev --config wrangler.omnipoint.test.toml
 ```
 
-The local SQLite tests verify the schema and stock triggers, but do not simulate Cloudflare D1 concurrency, the Worker runtime, or provider settlement. Do not connect the dashboard or production traffic until the API contract, auth bridge, idempotency, concurrency, rollback, backup and restore tests pass.
+The inventory page and cash-only POS UI have server-side bridge code, but they are not operational until the Worker URL, matching high-entropy HMAC secret, production schema and active staff memberships are configured. The local SQLite tests verify schema and trigger behavior only; they do not simulate Cloudflare D1 concurrency, the Worker runtime, or provider settlement. Do not route production traffic until the API contract, auth bridge, idempotency, concurrency, rollback, backup and restore tests pass.
