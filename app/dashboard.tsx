@@ -137,14 +137,87 @@ function Metric({icon,label,value,detail,tone}:{icon:React.ReactNode;label:strin
 }
 
 function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"demo"|"cloudflare";onNotice:(s:string)=>void}) {
-  const [search, setSearch] = useState("");
-  const [sku, setSku] = useState("");
+  type PosProduct = { id: string; name: string; sku: string; category: string | null; quantityOnHand: number; sellingPrice: number; isActive: boolean };
+  const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
+  const [posLoading, setPosLoading] = useState(false);
+  const [posError, setPosError] = useState("");
+  const [posSearch, setPosSearch] = useState("");
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [posBusy, setPosBusy] = useState(false);
+  const [saleKey, setSaleKey] = useState("");
+  useEffect(() => {
+    if (section !== "Retail POS") return;
+    let cancelled = false;
+    setPosLoading(true);
+    setPosError("");
+    fetch("/api/bridge/products", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.message || payload.error || "Cloudflare inventory is unavailable.");
+        if (!Array.isArray(payload.data)) throw new Error("Cloudflare returned an unexpected inventory response.");
+        return payload.data as PosProduct[];
+      })
+      .then((items) => { if (!cancelled) setPosProducts(items.filter(item => item.isActive)); })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPosProducts([]);
+          setPosError(error instanceof Error ? error.message : "Cloudflare inventory is unavailable. No sale was recorded.");
+        }
+      })
+      .finally(() => { if (!cancelled) setPosLoading(false); });
+    return () => { cancelled = true; };
+  }, [section]);
+  const cartLines = Object.entries(cart).map(([id, quantity]) => {
+    const product = posProducts.find(item => item.id === id);
+    return product ? { ...product, quantity, lineTotal: product.sellingPrice * quantity } : null;
+  }).filter((item): item is PosProduct & { quantity: number; lineTotal: number } => item !== null);
+  const cartTotal = cartLines.reduce((sum, item) => sum + item.lineTotal, 0);
+  async function submitCashSale() {
+    if (!cartLines.length) { setPosError("Add at least one product before recording a sale."); return; }
+    const key = saleKey || crypto.randomUUID();
+    setSaleKey(key);
+    setPosBusy(true);
+    setPosError("");
+    try {
+      const response = await fetch("/api/bridge/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+        body: JSON.stringify({ paymentMethod: "CASH", items: cartLines.map(item => ({ productId: item.id, quantity: item.quantity })) }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setPosError(payload.error === "cloudflare_bridge_not_configured" ? "Cloudflare is not configured. No sale was recorded." : `Sale was not confirmed (${payload.error || response.status}). Check status before retrying.`);
+        return;
+      }
+      const receipt = payload.data?.receipt_number || payload.data?.receiptNumber || "recorded";
+      onNotice(`Cash sale ${receipt} recorded. Inventory and retail ledger were updated by Cloudflare.`);
+      setCart({});
+      setSaleKey("");
+      const refreshed = await fetch("/api/bridge/products", { cache: "no-store" });
+      const inventory = await refreshed.json().catch(() => ({}));
+      if (refreshed.ok && Array.isArray(inventory.data)) setPosProducts(inventory.data.filter((item: PosProduct) => item.isActive));
+    } catch {
+      setPosError("The connection ended before the sale status was confirmed. Retry the same sale with the same request key.");
+    } finally {
+      setPosBusy(false);
+    }
+  }
+
   const titles:Record<Section,string> = {"Retail POS":"Retail point of sale","Inventory":"Inventory management","Fintech Agency":"Fintech agency desk","Reconciliation":"Daily reconciliation","Reports":"Reports & exports","Team & Access":"Team & access control","Settings":"Workspace settings","Overview":"Overview"};
   const descriptions:Record<Section,string> = {"Retail POS":"Build a retail cart and prepare a sale.","Inventory":"Track product records, variants, and stock alerts.","Fintech Agency":"Record agency service activity separately from retail.","Reconciliation":"Review retail cash and agency balances independently.","Reports":"Prepare clear, auditable business reports.","Team & Access":"Manage staff roles and privileged permissions.","Settings":"Configure the OmniPoint workspace.","Overview":""};
   return <div className="subpage"><div className="welcome-row"><div><div className="eyebrow">OMNIPOINT WORKSPACE</div><h1>{titles[section]}</h1><p className="page-description">{descriptions[section]}</p></div><span className="demo-tag">DEMO MODE</span></div>
     <div className="demo-banner"><div className="demo-banner-icon"><ShieldCheck size={18}/></div><div><strong>Prototype workflow — no financial operation is executed</strong><p>Actions here are illustrative only. Connect a secure API and verify provider responses before production use.</p></div></div>
     {section === "Inventory" && <div className="panel table-panel"><div className="panel-header"><div><h3>Product catalogue</h3><p>{inventorySource === "cloudflare" ? "Live read from the isolated Cloudflare migration database" : "Sample data only — Cloudflare connection not active"}</p></div><button className="secondary-button" onClick={() => onNotice("Product creation requires the inventory API and database.")}><Plus size={16}/> Add product</button></div><div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, SKU, category…"/></div><div className="table-wrap"><table><thead><tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>STATUS</th></tr></thead><tbody>{products.map(p=><tr key={p.sku}><td><strong>{p.name}</strong></td><td className="mono">{p.sku}</td><td>{p.category}</td><td>{p.stock}</td><td><span className={p.stock<=7?"status-low":"status-ok"}>{p.status}</span></td></tr>)}</tbody></table></div></div>}
-    {section === "Retail POS" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>New retail sale</h3><p>Demo cart builder · no payment processing</p></div><ShoppingBag size={20} className="panel-title-icon"/></div><label className="field-label">Find a product by name or SKU</label><div className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search sample products…"/></div><div className="pos-product-grid">{initialProducts.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())||p.sku.toLowerCase().includes(search.toLowerCase())).map(p=><button className="pos-product" key={p.sku} onClick={()=>setSku(p.sku)}><div className="product-icon"><Package size={20}/></div><strong>{p.name}</strong><span>{p.sku}</span><small>{p.stock} sample units</small></button>)}</div><div className="cart-summary"><div><strong>Selected item</strong><span>{sku ? initialProducts.find(p=>p.sku===sku)?.name : "No item selected"}</span></div><button className="primary-button" onClick={()=>onNotice(sku ? "Item selected in this demo. Sale recording and payment are not connected." : "Choose a product first.")}>Review demo cart <ArrowUpRight size={15}/></button></div></div>}
+    {section === "Retail POS" && <div className="panel workflow-panel">
+      <div className="panel-header"><div><h3>Retail point of sale</h3><p>Cash-only sales · inventory and ledger posting through Cloudflare D1</p></div><ShoppingBag size={20} className="panel-title-icon"/></div>
+      {posError && <div className="inline-warning" role="alert"><ShieldCheck size={17}/><span>{posError}</span></div>}
+      <label className="field-label">Find a product by name or SKU</label>
+      <div className="search-box"><Search size={17}/><input value={posSearch} onChange={e=>setPosSearch(e.target.value)} placeholder="Search live inventory…"/></div>
+      {posLoading ? <p className="page-description">Loading Cloudflare inventory…</p> : posProducts.length === 0 ? <p className="page-description">No Cloudflare inventory is available. Configure the API, migrate the schema, and provision an authorized staff membership before taking sales.</p> :
+      <div className="pos-product-grid">{posProducts.filter(p=>p.isActive && p.quantityOnHand>0 && [p.name,p.sku,p.category||""].some(v=>v.toLowerCase().includes(posSearch.toLowerCase()))).map(p=><button className="pos-product" key={p.id} disabled={Boolean(saleKey)} onClick={()=>setCart(current=>({...current,[p.id]:Math.min(p.quantityOnHand,(current[p.id]||0)+1)}))}><div className="product-icon"><Package size={20}/></div><strong>{p.name}</strong><span>{p.sku}</span><small>{p.quantityOnHand} units · UGX {p.sellingPrice.toLocaleString("en-UG")}</small></button>)}</div>}
+      <div className="cart-summary"><div><strong>Cash sale cart</strong><span>{cartLines.length ? cartLines.map(item=>`${item.name} × ${item.quantity}`).join(" · ") : "No items selected"}</span><strong>UGX {cartTotal.toLocaleString("en-UG")}</strong></div><button className="primary-button" disabled={posBusy || !cartLines.length || posProducts.length===0} onClick={submitCashSale}>{posBusy ? "Recording…" : saleKey ? "Retry same sale" : "Record cash sale"} <ArrowUpRight size={15}/></button></div>
+      {saleKey && <p className="page-description">A request key is held for this sale. Retry the same request if the connection was interrupted; do not create a second sale until its status is known.</p>}
+    </div>}
     {section === "Fintech Agency" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Agency service record</h3><p>Local draft only · not a mobile-money transaction</p></div><Smartphone size={20} className="panel-title-icon"/></div><div className="segmented"><button className={serviceTab==="Cash in"?"selected":""} onClick={()=>setServiceTab("Cash in")}><ArrowDownLeft size={16}/> Cash in</button><button className={serviceTab==="Cash out"?"selected":""} onClick={()=>setServiceTab("Cash out")}><ArrowUpRight size={16}/> Cash out</button></div><label className="field-label">Amount (UGX)</label><input className="form-input" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,""))} placeholder="Enter amount"/><div className="inline-warning"><ShieldCheck size={17}/><span>Never enter a customer PIN or OTP here. Provider execution must use an approved, secure integration.</span></div><button className="primary-button" onClick={()=>onNotice(amount && Number(amount)>0 ? `${serviceTab} draft prepared for UGX ${Number(amount).toLocaleString("en-UG")}. Nothing has been sent or recorded.` : "Enter a valid amount to prepare a demo draft.")}>Prepare demo draft <ArrowUpRight size={16}/></button></div>}
     {section === "Reconciliation" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Ledger reconciliation</h3><p>Separate checks for each accounting stream</p></div><Activity size={20} className="panel-title-icon"/></div><div className="recon-row"><div className="ledger-tile-icon"><ShoppingBag size={18}/></div><div className="ledger-tile-copy"><strong>Retail cash reconciliation</strong><span>Expected cash vs counted cash · Retail ledger only</span></div><span className="status-pending">NOT STARTED</span></div><div className="recon-row"><div className="ledger-tile-icon"><Smartphone size={18}/></div><div className="ledger-tile-copy"><strong>Agency float reconciliation</strong><span>Cash, provider balances and recorded float movements</span></div><span className="status-pending">NOT STARTED</span></div><button className="secondary-button" onClick={()=>onNotice("Reconciliation needs persisted transactions, counted balances, and provider statements.")}>Review requirements</button></div>}
     {section === "Reports" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Available report templates</h3><p>Exports will be enabled after backend and compliance validation.</p></div><Download size={20} className="panel-title-icon"/></div><div className="report-item"><div className="quick-icon violet-bg"><ShoppingBag size={18}/></div><div><strong>Retail sales & stock</strong><span>Sales, COGS, stock movements, invoice metadata</span></div><button className="secondary-button" onClick={()=>onNotice("No report generated: demo data only.")}>Export <Download size={14}/></button></div><div className="report-item"><div className="quick-icon blue-bg"><Wallet size={18}/></div><div><strong>Fintech agency ledger</strong><span>Cash-in/out, float changes, commissions, volumes</span></div><button className="secondary-button" onClick={()=>onNotice("No report generated: provider and ledger data are not connected.")}>Export <Download size={14}/></button></div><div className="report-item"><div className="quick-icon green-bg"><ShieldCheck size={18}/></div><div><strong>Audit trail</strong><span>Privileged actions, approvals and change history</span></div><button className="secondary-button" onClick={()=>onNotice("Audit export will be available after audit storage is implemented.")}>Export <Download size={14}/></button></div></div>}
