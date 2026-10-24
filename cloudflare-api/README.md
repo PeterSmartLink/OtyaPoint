@@ -22,9 +22,9 @@ The new core schema was applied to the isolated migration-test database for vali
 
 ## Authentication boundary
 
-Business routes require a short-lived HMAC-SHA256 JWT with issuer `omnipoint` and audience `omnipoint-api`. The signature secret must be stored as a Worker secret and in a trusted server-side issuer only. The API loads the active staff membership and role from the OmniPoint database; the role supplied by a browser or token does not grant access.
+Business routes pass the caller's Otya access token to the existing `otya-auth` Worker using a Cloudflare service binding and accept the identity only when `/auth/verify` returns a verified user ID. OmniPoint then looks up an active local staff membership and role in its own D1 database. A global Otya login does not itself grant OmniPoint access, and browser-supplied roles are never trusted.
 
-The token issuer/bridge from verified Otya Auth identity to an OmniPoint-scoped token is not complete. No public bootstrap-admin route exists. Do not configure a secret or enable business routes until the issuer, expiry, revocation, staff onboarding and owner recovery process are reviewed.
+The production Wrangler config contains the service binding but has not been deployed by this branch. The dashboard is not yet wired to pass the current Otya access token to this API, and staff onboarding/provisioning is not complete. No public bootstrap-admin route exists. Do not enable business routes until token verification, staff onboarding, owner recovery and authorization tests are reviewed.
 
 ## Validation
 
