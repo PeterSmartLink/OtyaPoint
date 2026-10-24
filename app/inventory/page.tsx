@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { Boxes, ArrowLeft, ShieldCheck, PackagePlus, ClipboardList } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { omnipointApiRequest } from "@/lib/omnipoint-api";
 import { requireStaff } from "@/lib/auth";
 import { adjustStockAction, createProductAction } from "./actions";
 
 type PageProps = { searchParams: Promise<{ error?: string; success?: string; q?: string }> };
+type ProductRow = {
+  id: string; sku: string; name: string; category: string | null;
+  costPrice: number; sellingPrice: number; quantityOnHand: number;
+  reorderLevel: number; updatedAt: Date;
+};
 
 const managerRoles = new Set(["MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN", "SOVEREIGN"]);
 
@@ -27,8 +33,33 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const canManage = managerRoles.has(staff.role);
   const query = (params.q ?? "").trim().slice(0, 80);
+  const useCloudflare = process.env.OMNIPOINT_AUTH_MODE === "otya";
+  let apiUnavailable = false;
+  let products: ProductRow[];
 
-  const products = await prisma.product.findMany({
+  if (useCloudflare) {
+    const response = await omnipointApiRequest("/api/products");
+    if (!response?.ok) {
+      apiUnavailable = true;
+      products = [];
+    } else {
+      const payload = await response.json() as { data?: Array<Record<string, unknown>> };
+      products = (Array.isArray(payload.data) ? payload.data : []).map((product) => ({
+        id: String(product.id ?? ""),
+        sku: String(product.sku ?? ""),
+        name: String(product.name ?? ""),
+        category: typeof product.category === "string" ? product.category : null,
+        costPrice: Number(product.cost_price ?? 0),
+        sellingPrice: Number(product.selling_price ?? 0),
+        quantityOnHand: Number(product.quantity_on_hand ?? 0),
+        reorderLevel: Number(product.reorder_level ?? 0),
+        updatedAt: new Date(String(product.updated_at ?? product.created_at ?? Date.now())),
+      })).filter((product) => !query || [product.name, product.sku, product.category ?? ""].some((value) => value.toLowerCase().includes(query.toLowerCase())))
+        .sort((a, b) => a.quantityOnHand - b.quantityOnHand || a.name.localeCompare(b.name))
+        .slice(0, 200);
+    }
+  } else {
+    const legacyProducts = await prisma.product.findMany({
     where: query ? {
       isActive: true,
       OR: [
@@ -44,7 +75,14 @@ export default async function InventoryPage({ searchParams }: PageProps) {
       costPrice: true, sellingPrice: true, quantityOnHand: true,
       reorderLevel: true, updatedAt: true,
     },
-  });
+    });
+    products = legacyProducts.map((product) => ({
+      id: product.id, sku: product.sku, name: product.name, category: product.category,
+      costPrice: Number(product.costPrice), sellingPrice: Number(product.sellingPrice),
+      quantityOnHand: product.quantityOnHand, reorderLevel: product.reorderLevel,
+      updatedAt: product.updatedAt,
+    }));
+  }
 
   const lowStock = products.filter((product) => product.quantityOnHand <= product.reorderLevel).length;
   const stockUnits = products.reduce((sum, product) => sum + product.quantityOnHand, 0);
@@ -66,6 +104,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         <div><strong>Controlled inventory actions</strong><p>Stock updates are recorded with the operator, reason, before/after quantities, and an audit event. Financial and provider transactions are not executed here.</p></div>
       </div>
 
+      {apiUnavailable && <p role="alert" style={{ ...styles.message, ...styles.error }}>Cloudflare inventory is temporarily unavailable. No changes were made. Refresh in a moment or contact the system administrator.</p>}
       {params.error && <p role="alert" style={{ ...styles.message, ...styles.error }}>{errors[params.error] ?? "The request could not be completed."}</p>}
       {params.success && <p role="status" style={{ ...styles.message, ...styles.success }}>{successes[params.success] ?? "Completed."}</p>}
 
@@ -81,7 +120,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <label style={styles.label}>Product name<input name="name" required minLength={2} maxLength={120} placeholder="e.g. USB-C fast charger" style={styles.input} /></label>
           <label style={styles.label}>SKU / product code<input name="sku" required minLength={2} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,39}" placeholder="e.g. ACC-1042" style={styles.input} /></label>
           <label style={styles.label}>Category<input name="category" maxLength={80} placeholder="Accessories, phones, electronics…" style={styles.input} /></label>
-          <label style={styles.label}>Cost price (UGX)<input name="costPrice" type="number" required min="0" max="999999999999" step="0.01" defaultValue="0" style={styles.input} /></label>
+          <label style={styles.label}>Cost price (UGX)<input name="costPrice" type="number" required min="0" max="999999999999" step={useCloudflare ? "1" : "0.01"} defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Selling price (UGX)<input name="sellingPrice" type="number" required min="0" max="999999999999" step="0.01" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Opening stock<input name="openingStock" type="number" required min="0" max="999999999" step="1" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Reorder alert level<input name="reorderLevel" type="number" required min="0" max="999999999" step="1" defaultValue="3" style={styles.input} /></label>
