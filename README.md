@@ -48,7 +48,7 @@ python3 cloudflare-api/tests/test_core_schema.py
 - `wrangler.omnipoint.test.toml` describes the dedicated test configuration for the new API/schema work.
 - `wrangler.omnipoint.toml` describes the proposed dedicated production Worker bindings. Do not deploy this configuration until the release gates are satisfied.
 - The production config has no custom domain. Do not bind OmniPoint records into the shared `otya-core` Worker by default.
-- Business routes verify the caller's Otya access token through the existing Auth Worker service binding, then require an active local staff record. The browser's role claims are never trusted. No public bootstrap-admin route exists.
+- The current web bridge issues a five-minute HMAC-signed token only after the existing server-side staff session and profile are verified. The Worker verifies the signature and expiry, then loads the authoritative company, branch, role and status from its own D1 staff table. This is a transitional compatibility adapter, not yet the shared Otya Auth login flow. No public bootstrap-admin route exists.
 - Cash POS posting is designed to use one D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Validate concurrency and failure rollback in CI and an isolated environment before production use.
 - Agency transactions deliberately return a disabled response until verified provider adapters and status reconciliation are ready.
 
