@@ -190,7 +190,7 @@ function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,a
         return;
       }
       const receipt = payload.data?.receipt_number || payload.data?.receiptNumber || "recorded";
-      setNotice(`Cash sale ${receipt} recorded. Inventory and retail ledger were updated by Cloudflare.`);
+      onNotice(`Cash sale ${receipt} recorded. Inventory and retail ledger were updated by Cloudflare.`);
       setCart({});
       setSaleKey("");
       const refreshed = await fetch("/api/bridge/products", { cache: "no-store" });
@@ -203,8 +203,6 @@ function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,a
     }
   }
 
-  const [search, setSearch] = useState("");
-  const [sku, setSku] = useState("");
   const titles:Record<Section,string> = {"Retail POS":"Retail point of sale","Inventory":"Inventory management","Fintech Agency":"Fintech agency desk","Reconciliation":"Daily reconciliation","Reports":"Reports & exports","Team & Access":"Team & access control","Settings":"Workspace settings","Overview":"Overview"};
   const descriptions:Record<Section,string> = {"Retail POS":"Build a retail cart and prepare a sale.","Inventory":"Track product records, variants, and stock alerts.","Fintech Agency":"Record agency service activity separately from retail.","Reconciliation":"Review retail cash and agency balances independently.","Reports":"Prepare clear, auditable business reports.","Team & Access":"Manage staff roles and privileged permissions.","Settings":"Configure the OmniPoint workspace.","Overview":""};
   return <div className="subpage"><div className="welcome-row"><div><div className="eyebrow">OMNIPOINT WORKSPACE</div><h1>{titles[section]}</h1><p className="page-description">{descriptions[section]}</p></div><span className="demo-tag">DEMO MODE</span></div>
