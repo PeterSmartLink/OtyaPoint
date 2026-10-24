@@ -15,7 +15,7 @@
 - A dedicated production D1 database exists: omnipoint-prod. This branch has not applied its schema.
 - A separate migration-test D1 database exists. The new namespaced OmniPoint schema was applied there for validation; existing tables from the prior test schema were left untouched.
 - A separate Worker configuration exists for test and production bindings. The production config has no custom domain and has not been deployed by this branch.
-- The API now has protected product reads, product creation, stock adjustment, cash POS posting, summary and ledger reads in code. The token issuer/bridge and staff onboarding path are not complete, so business routes should fail closed until a trusted server-side token issuer and active staff records exist.
+- The API now has protected product reads, product creation, stock adjustment, cash POS posting, summary and ledger reads in code. The Worker now verifies access tokens through the existing Otya Auth service binding and loads the local OmniPoint role from D1. The dashboard is not yet wired to send its Otya access token, and staff provisioning is incomplete; protected routes should fail closed until an active staff record exists.
 - Agency provider execution remains disabled and returns a non-success response without making provider calls or recording a false success.
 - The dashboard is not yet wired to the new API. Existing PostgreSQL/Supabase runtime code must not be removed until the new UI/API contract and migration/cutover are proven.
 
