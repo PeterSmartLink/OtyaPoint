@@ -17,12 +17,7 @@ const navigation: { title: string; items: { name: Section; icon: typeof LayoutDa
   { title: "MANAGEMENT", items: [{ name: "Reconciliation", icon: Activity }, { name: "Reports", icon: BriefcaseBusiness }, { name: "Team & Access", icon: ShieldCheck }, { name: "Settings", icon: Settings2 }] },
 ];
 
-const initialProducts = [
-  { name: "USB-C Fast Charger", sku: "ACC-1042", category: "Accessories", stock: 18, status: "In stock" },
-  { name: "Wireless Earbuds", sku: "AUD-2081", category: "Audio", stock: 7, status: "Low stock" },
-  { name: "Smartphone Case", sku: "ACC-1033", category: "Accessories", stock: 32, status: "In stock" },
-  { name: "Power Bank 20,000mAh", sku: "PWR-3014", category: "Power", stock: 4, status: "Low stock" },
-];
+const initialProducts: Array<{ name: string; sku: string; category: string; stock: number; status: string }> = [];
 
 type DashboardProps = { role: string; displayName: string; agentId: string | null };
 
@@ -33,7 +28,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [products, setProducts] = useState(initialProducts);
-  const [inventorySource, setInventorySource] = useState<"demo" | "cloudflare">("demo");
+  const [inventorySource, setInventorySource] = useState<"unavailable" | "cloudflare">("unavailable");
 
   useEffect(() => {
     if (section !== "Inventory") return;
@@ -52,9 +47,9 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setProducts(initialProducts);
-        setInventorySource("demo");
-        setNotice(error instanceof Error ? error.message : "Cloudflare inventory is not connected. Showing demo data.");
+        setProducts([]);
+        setInventorySource("unavailable");
+        setNotice(error instanceof Error ? error.message : "Live inventory is unavailable. No demo data is being shown.");
       });
     return () => { cancelled = true; };
   }, [section]);
@@ -90,7 +85,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         {(role === "MANAGING_DIRECTOR" || role === "CHAIRMAN" || role === "SOVEREIGN") && <div className="nav-group"><div className="nav-label">ACCESS CONTROL</div><Link href="/management/staff" className="nav-item"><ShieldCheck size={18}/><span>Staff onboarding</span></Link></div>}
         </nav>
         <div className="sidebar-bottom">
-          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Demo-only; no live payments.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
+          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Identity and API cutover pending.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
           <button className="nav-item support-link" onClick={() => setNotice("Support centre is a prototype placeholder. Connect a support channel before launch.")}><LifeBuoy size={18}/><span>Help & support</span></button>
           <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
         </div>
@@ -101,7 +96,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
       <section className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><button className="mobile-menu icon-button" onClick={() => setMobileNav(true)} aria-label="Open menu"><Menu size={20}/></button><span>Workspace</span><span className="crumb-slash">/</span><strong>{section}</strong></div>
-          <div className="top-actions"><div className="environment-pill"><span/> DEMO ENVIRONMENT</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No live alerts are connected in this prototype.")}><Bell size={18}/><i/></button><div className="top-avatar">{displayName.trim().charAt(0).toUpperCase()}</div></div>
+          <div className="top-actions"><div className="environment-pill"><span/> CLOUDFLARE CUTOVER IN PROGRESS</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No live alerts are connected in this prototype.")}><Bell size={18}/><i/></button><div className="top-avatar">{displayName.trim().charAt(0).toUpperCase()}</div></div>
         </header>
 
         <div className="page-content">
