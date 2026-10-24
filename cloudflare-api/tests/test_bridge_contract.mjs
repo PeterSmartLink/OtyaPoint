@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const route = readFileSync(new URL('../../app/api/bridge/products/route.ts', import.meta.url), 'utf8')
+const dashboard = readFileSync(new URL('../../app/dashboard.tsx', import.meta.url), 'utf8')
 
 test('Cloudflare bridge forwards the HttpOnly Otya access token without minting a local JWT', () => {
   assert.match(route, /cookies\(\)/)
@@ -23,4 +24,11 @@ test('bridge fails closed when the API URL or Otya access token is missing', () 
 test('bridge never treats browser-provided role or identity fields as authorization', () => {
   assert.doesNotMatch(route, /request\.json\(|request\.headers\.get\(["']x-role/i)
   assert.match(route, /Authorization:.*accessToken/)
+})
+
+test('inventory UI never silently substitutes demo products when the live API fails', () => {
+  assert.match(dashboard, /setInventorySource\("unavailable"\)/)
+  assert.match(dashboard, /setProducts\(\[\]\)/)
+  assert.doesNotMatch(dashboard, /setProducts\(initialProducts\)/)
+  assert.match(dashboard, /sample products are intentionally hidden/)
 })
