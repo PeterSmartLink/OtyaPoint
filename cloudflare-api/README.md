@@ -25,7 +25,7 @@ The core schema and additive company-scope migration were applied to the isolate
 
 Business routes pass the caller's Otya access token to the existing `otya-auth` Worker using a Cloudflare service binding and accept the identity only when `/auth/verify` returns a verified user ID. OmniPoint then looks up an active local staff membership and role in its own D1 database. A global Otya login does not itself grant OmniPoint access, and browser-supplied roles are never trusted.
 
-The production Wrangler config contains the service binding but has not been deployed by this branch. The dashboard is not yet wired to pass the current Otya access token to this API, and staff onboarding/provisioning is not complete. No public bootstrap-admin route exists. Do not enable business routes until token verification, staff onboarding, owner recovery and authorization tests are reviewed.
+The production Wrangler config contains the service binding but has not been deployed by this branch. The same-origin Vercel bridge now forwards only the HttpOnly `otya_access_token` cookie; it no longer fabricates an HS256 token from a local staff profile. The current login flow does not yet issue that Otya cookie, and staff onboarding/provisioning into OmniPoint D1 is incomplete, so live inventory must fail closed until both are implemented and tested. No public bootstrap-admin route exists. Do not enable business routes until token verification, staff onboarding, owner recovery and authorization tests are reviewed.
 
 ## Validation
 
