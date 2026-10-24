@@ -18,10 +18,9 @@ export interface Env {
   BACKUPS: R2Bucket;
   CACHE: KVNamespace;
   JOBS: Queue;
-  AUTH_HMAC_SECRET?: string;
+  AUTH?: { fetch(request: Request): Promise<Response> };
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Claims = { sub: string; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
 type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string };
 const roles: Role[] = ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -52,28 +51,27 @@ const canManage = (staff: Staff) => ["SOVEREIGN", "MANAGER", "MANAGING_DIRECTOR"
 const isResponse = (value: Staff | Response): value is Response => value instanceof Response;
 
 async function authenticate(request: Request, env: Env): Promise<Staff | Response> {
-  if (!env.AUTH_HMAC_SECRET) return json({ error: "auth_not_configured" }, 503);
   const header = request.headers.get("authorization") || "";
   if (!header.startsWith("Bearer ") || header.length > 8192) return json({ error: "unauthorized" }, 401);
-  const token = header.slice(7);
-  const parts = token.split(".");
-  if (parts.length !== 3) return json({ error: "unauthorized" }, 401);
+  if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
   try {
-    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.AUTH_HMAC_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-    const valid = await crypto.subtle.verify("HMAC", key, decode(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
-    if (!valid) return json({ error: "unauthorized" }, 401);
-    const claims = JSON.parse(new TextDecoder().decode(decode(parts[1]))) as Claims;
-    if (!claims.sub || claims.sub.length > 256 || !Number.isFinite(claims.exp) || claims.exp <= Date.now() / 1000 ||
-        claims.exp > Date.now() / 1000 + 15 * 60 || claims.iss !== "omnipoint" || claims.aud !== "omnipoint-api") {
+    const verifiedResponse = await env.AUTH.fetch(new Request("https://auth/auth/verify", {
+      method: "GET",
+      headers: { Authorization: header, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000)
+    }));
+    if (!verifiedResponse.ok) return json({ error: "unauthorized" }, 401);
+    const verified = await verifiedResponse.json() as { ok?: boolean; user_id?: unknown; email?: unknown };
+    if (verified.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
       return json({ error: "unauthorized" }, 401);
     }
     const staff = await env.DB.prepare(
       "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
-    ).bind(claims.sub).first<Staff>();
+    ).bind(verified.user_id).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
     return staff;
   } catch {
-    return json({ error: "unauthorized" }, 401);
+    return json({ error: "auth_service_unavailable" }, 503);
   }
 }
 async function audit(env: Env, actor: string, action: string, entityType: string, entityId: string | null, reason: string | null, before: unknown, after: unknown, requestId: string) {
