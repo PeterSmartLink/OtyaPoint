@@ -21,7 +21,7 @@ export interface Env {
   AUTH?: { fetch(request: Request): Promise<Response> };
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string };
+type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string; email: string | null; display_name: string | null; agent_id: string | null; identity_status: string };
 const roles: Role[] = ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -57,9 +57,9 @@ async function authenticate(request: Request, env: Env): Promise<Staff | Respons
       return json({ error: "unauthorized" }, 401);
     }
     const staff = await env.DB.prepare(
-      "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
+      "SELECT id, identity_subject, company_id, branch_id, role, status, email, display_name, agent_id, identity_status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
     ).bind(verified.user_id).first<Staff>();
-    if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
+    if (!staff || staff.status !== "ACTIVE" || staff.identity_status !== "VERIFIED" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
     return staff;
   } catch {
     return json({ error: "auth_service_unavailable" }, 503);
@@ -110,7 +110,12 @@ export default {
             companyId: staff.company_id,
             branchId: staff.branch_id,
             role: staff.role,
-            status: staff.status
+            status: staff.status,
+            email: staff.email,
+            displayName: staff.display_name,
+            agentId: staff.agent_id,
+            identityStatus: staff.identity_status,
+            isActive: staff.status === "ACTIVE"
           },
           requestId: rid
         });
