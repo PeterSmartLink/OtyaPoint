@@ -34,7 +34,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
         self.assertTrue({
             "omni_products", "omni_retail_sales", "omni_retail_sale_lines",
             "omni_stock_movements", "omni_agency_transactions",
-            "omni_ledger_entries", "omni_reconciliation_sessions",
+            "omni_ledger_entries", "omni_ledger_journals", "omni_reconciliation_sessions",
             "omni_audit_events", "omni_staff_memberships"
         }.issubset(tables))
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM omni_products").fetchone()[0], 0)
@@ -175,7 +175,8 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             "omni_retail_sale_lines": {"id", "sale_id", "product_id", "quantity", "line_total"},
             "omni_stock_movements": {"id", "product_id", "actor_id", "movement_type", "quantity_delta", "quantity_after", "company_id"},
             "omni_agency_transactions": {"id", "provider_status", "amount", "company_id"},
-            "omni_ledger_entries": {"id", "ledger_type", "debit", "credit", "idempotency_key", "company_id"},
+            "omni_ledger_entries": {"id", "journal_id", "ledger_type", "debit", "credit", "idempotency_key", "company_id"},
+            "omni_ledger_journals": {"id", "company_id", "ledger_type", "source_type", "source_id", "idempotency_key", "created_by", "status", "posted_at"},
             "omni_reconciliation_sessions": {"id", "ledger_type", "business_date", "company_id"},
             "omni_audit_events": {"id", "actor_id", "action", "request_id", "company_id"},
             "omni_staff_memberships": {"id", "identity_subject", "company_id", "branch_id", "role", "status", "display_name", "email", "agent_id"},
