@@ -8,11 +8,12 @@ This is a dedicated OmniPoint Worker API path. It uses a namespaced D1 schema an
 - `wrangler.omnipoint.test.toml`: isolated API configuration using the migration-test D1 database only.
 - `wrangler.omnipoint.toml`: dedicated production binding definition for omnipoint-prod, private R2, cache and the jobs queue. It has no custom domain and must not be deployed until the release gates pass.
 
-The core schema and additive company-scope migration were applied to the isolated migration-test database for validation. Its migration baseline is recorded there. Neither migration has been applied to the production database by this branch.
+The core schema and additive company-scope migration were applied to the isolated migration-test database for validation. The later staff-profile migration is part of this branch and has not been applied to any Cloudflare database. The test database's earlier migration baseline is recorded there. Production migrations remain a separate release gate.
 
 ## API surface
 
 - `GET /health`: schema readiness only; does not reveal table names or business data.
+- `GET /api/me`: verified Otya identity mapped to the active local OmniPoint staff membership; returns only the staff profile needed by the workspace.
 - `GET /api/products`: authenticated inventory read.
 - `POST /api/products`: manager-authorized product creation, with audit record.
 - `POST /api/stock-adjustments`: manager-authorized audited movement; D1 triggers enforce quantity invariants.
