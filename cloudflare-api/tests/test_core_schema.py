@@ -187,5 +187,71 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                 }
                 self.assertTrue(expected_columns.issubset(actual), expected_columns - actual)
 
+    def _create_journal(self, journal_id="journal-test", company_id="omnipoint-default"):
+        self.db.execute(
+            """INSERT INTO omni_ledger_journals
+               (id, company_id, ledger_type, source_type, source_id, idempotency_key, created_by)
+               VALUES (?, ?, 'RETAIL', 'RETAIL_SALE', 'sale-journal-test', ?, 'staff-test')""",
+            (journal_id, company_id, journal_id + "-key"),
+        )
+
+    def _add_journal_entries(self, journal_id, debit, credit, company_id="omnipoint-default"):
+        self.db.executemany(
+            """INSERT INTO omni_ledger_entries
+               (id, journal_id, ledger_type, account_code, currency, debit, credit,
+                source_type, source_id, idempotency_key, description, company_id)
+               VALUES (?, ?, 'RETAIL', ?, 'UGX', ?, ?, 'RETAIL_SALE',
+                       'sale-journal-test', ?, 'test journal line', ?)""",
+            [
+                (journal_id + "-debit", journal_id, "CASH_ON_HAND", debit, 0,
+                 journal_id + "-debit-key", company_id),
+                (journal_id + "-credit", journal_id, "SALES_REVENUE", 0, credit,
+                 journal_id + "-credit-key", company_id),
+            ],
+        )
+
+    def test_ledger_journal_posts_only_when_debits_equal_credits(self):
+        self._create_journal()
+        self._add_journal_entries("journal-test", 12500, 12500)
+        self.db.execute(
+            "UPDATE omni_ledger_journals SET status='POSTED', posted_at=CURRENT_TIMESTAMP WHERE id='journal-test'"
+        )
+        row = self.db.execute(
+            "SELECT status, posted_at FROM omni_ledger_journals WHERE id='journal-test'"
+        ).fetchone()
+        self.assertEqual(row[0], "POSTED")
+        self.assertIsNotNone(row[1])
+
+    def test_unbalanced_ledger_journal_cannot_be_posted(self):
+        self._create_journal()
+        self._add_journal_entries("journal-test", 12500, 12000)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "UPDATE omni_ledger_journals SET status='POSTED' WHERE id='journal-test'"
+            )
+        status = self.db.execute(
+            "SELECT status FROM omni_ledger_journals WHERE id='journal-test'"
+        ).fetchone()[0]
+        self.assertEqual(status, "DRAFT")
+
+    def test_posted_ledger_journal_and_entries_are_immutable(self):
+        self._create_journal()
+        self._add_journal_entries("journal-test", 12500, 12500)
+        self.db.execute(
+            "UPDATE omni_ledger_journals SET status='POSTED', posted_at=CURRENT_TIMESTAMP WHERE id='journal-test'"
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "UPDATE omni_ledger_entries SET debit=12000 WHERE id='journal-test-debit'"
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "DELETE FROM omni_ledger_entries WHERE id='journal-test-credit'"
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "UPDATE omni_ledger_journals SET status='DRAFT' WHERE id='journal-test'"
+            )
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
