@@ -18,7 +18,7 @@ export interface Env {
   BACKUPS: R2Bucket;
   CACHE: KVNamespace;
   JOBS: Queue;
-  AUTH?: { fetch(request: Request): Promise<Response> };
+  OMNIPOINT_API_HMAC_SECRET?: string;
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string; display_name: string; email: string | null; agent_id: string | null; verified_email?: string | null };
@@ -41,28 +41,44 @@ const isRole = (value: unknown): value is Role => typeof value === "string" && r
 const canManage = (staff: Staff) => ["SOVEREIGN", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(staff.role);
 const isResponse = (value: Staff | Response): value is Response => value instanceof Response;
 
+type BridgeClaims = { sub?: unknown; exp?: unknown; iat?: unknown; iss?: unknown; aud?: unknown };
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
 async function authenticate(request: Request, env: Env): Promise<Staff | Response> {
   const header = request.headers.get("authorization") || "";
-  if (!header.startsWith("Bearer ") || header.length > 8192) return json({ error: "unauthorized" }, 401);
-  if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const secret = env.OMNIPOINT_API_HMAC_SECRET;
+  if (!token || token.length > 8192 || !secret || secret.length < 32) return json({ error: "unauthorized" }, 401);
+  const parts = token.split(".");
+  if (parts.length !== 3) return json({ error: "unauthorized" }, 401);
   try {
-    const verifiedResponse = await env.AUTH.fetch(new Request("https://auth/auth/verify", {
-      method: "GET",
-      headers: { Authorization: header, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000)
-    }));
-    if (!verifiedResponse.ok) return json({ error: "unauthorized" }, 401);
-    const verified = await verifiedResponse.json() as { ok?: boolean; user_id?: unknown; email?: unknown };
-    if (verified.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
+    const jwtHeader = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[0]))) as { alg?: string; typ?: string };
+    if (jwtHeader.alg !== "HS256" || jwtHeader.typ !== "JWT") return json({ error: "unauthorized" }, 401);
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    const validSignature = await crypto.subtle.verify("HMAC", key, decodeBase64Url(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
+    if (!validSignature) return json({ error: "unauthorized" }, 401);
+    const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[1]))) as BridgeClaims;
+    const now = Math.floor(Date.now() / 1000);
+    if (typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 256 ||
+        typeof claims.exp !== "number" || !Number.isSafeInteger(claims.exp) || claims.exp <= now ||
+        typeof claims.iat !== "number" || !Number.isSafeInteger(claims.iat) || claims.iat > now + 30 ||
+        claims.exp - now > 600 || claims.iss !== "omnipoint" || claims.aud !== "omnipoint-api") {
       return json({ error: "unauthorized" }, 401);
     }
+    // The token identifies the caller only. Authorization comes from the D1 staff record.
     const staff = await env.DB.prepare(
-      "SELECT id, identity_subject, company_id, branch_id, role, status, display_name, email, agent_id FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
-    ).bind(verified.user_id).first<Staff>();
+      "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
+    ).bind(claims.sub).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
-    return { ...staff, verified_email: typeof verified.email === "string" ? verified.email : null };
+    return staff;
   } catch {
-    return json({ error: "auth_service_unavailable" }, 503);
+    return json({ error: "unauthorized" }, 401);
   }
 }
 async function audit(env: Env, actor: string, action: string, entityType: string, entityId: string | null, reason: string | null, before: unknown, after: unknown, requestId: string) {
@@ -155,16 +171,22 @@ export default {
         const cost = int(body.costPrice);
         const price = int(body.sellingPrice);
         const reorder = int(body.reorderLevel);
-        if (!sku || !/^[A-Z0-9._-]{2,64}$/.test(sku) || !name || cost === null || price === null || reorder === null) return json({ error: "invalid_product" }, 400);
+        const openingStock = int(body.openingStock ?? 0);
+        if (!sku || !/^[A-Z0-9._-]{2,64}$/.test(sku) || !name || cost === null || price === null || reorder === null || openingStock === null || openingStock > 100000000) return json({ error: "invalid_product" }, 400);
         const id = uuid();
-        const product = { id, sku, name, category, costPrice: cost, sellingPrice: price, quantityOnHand: 0, reorderLevel: reorder };
+        const product = { id, sku, name, category, costPrice: cost, sellingPrice: price, quantityOnHand: openingStock, reorderLevel: reorder };
         try {
-          await env.DB.batch([
+          const statements: D1Statement[] = [
             env.DB.prepare("INSERT INTO omni_products (id,sku,name,description,category,cost_price,selling_price,quantity_on_hand,reorder_level,company_id) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8,?9)")
-              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder, staff.company_id),
-            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created',?4,?5,?6)")
-              .bind(uuid(), staff.id, id, JSON.stringify(product), rid, staff.company_id)
-          ]);
+              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder, staff.company_id)
+          ];
+          if (openingStock > 0) {
+            statements.push(env.DB.prepare("INSERT INTO omni_stock_movements (id,product_id,actor_id,movement_type,quantity_delta,quantity_after,unit_cost,reference_type,reference_id,reason,company_id) VALUES (?1,?2,?3,'OPENING',?4,?4,?5,'PRODUCT_OPENING',?2,'Opening stock recorded when product was created',?6)")
+              .bind(uuid(), id, staff.id, openingStock, cost, staff.company_id));
+          }
+          statements.push(env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id,company_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created with opening stock',NULL,?4,?5,?6)")
+            .bind(uuid(), staff.id, id, JSON.stringify(product), rid, staff.company_id));
+          await env.DB.batch(statements);
         } catch (error) {
           if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "sku_conflict" }, 409);
           throw error;
