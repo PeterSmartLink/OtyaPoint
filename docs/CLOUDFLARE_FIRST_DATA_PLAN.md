@@ -55,7 +55,7 @@ The Python SQLite suite validates schema and trigger behavior only; Cloudflare D
 
 ## Otya Auth integration gate
 
-Before integrating shared login, verify the deployed issuer, signature algorithm/key, key rotation, issuer, audience, expiry and revocation semantics. OmniPoint must map a verified identity subject to an active local staff membership. A global Otya login is not a grant of OmniPoint manager or cashier permissions. Token signing must occur only in a trusted server-side component and must never expose the shared HMAC secret to a browser or APK.
+The dedicated OmniPoint Worker verifies access tokens by calling the existing Otya Auth Worker through a Cloudflare service binding. Confirm this binding in the deployed environment and test invalid, expired, revoked and unavailable-token cases. OmniPoint must map a verified identity subject to an active local staff membership. A global Otya login is not a grant of OmniPoint manager or cashier permissions. Never copy the Otya signing secret or refresh-token store into OmniPoint or a browser/APK.
 
 ## Release sequence
 
