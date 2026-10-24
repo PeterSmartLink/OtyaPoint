@@ -63,3 +63,25 @@ export async function getOmniPointStaff(accessToken: string): Promise<StaffLooku
     return { kind: "unavailable" };
   }
 }
+
+export async function omnipointApiRequest(path: string, init: RequestInit = {}): Promise<Response | null> {
+  const base = omnipointApiBase();
+  const token = (await cookies()).get("omnipoint_access")?.value;
+  if (!base || !token || !path.startsWith("/api/")) return null;
+
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", "Bearer " + token);
+  headers.set("Accept", "application/json");
+  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+
+  try {
+    return await fetch(base + path, {
+      ...init,
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return null;
+  }
+}
