@@ -41,3 +41,10 @@ test('Cloudflare inventory API returns the documented camelCase dashboard fields
   assert.match(api, /quantity_on_hand: number/)
   assert.match(api, /is_active === 1/)
 })
+
+test('summary and ledger views exclude draft journals and include journal references', () => {
+  const api = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+  assert.ok((api.match(/j\.status='POSTED'/g) || []).length >= 4)
+  assert.match(api, /e\.journal_id/)
+  assert.match(api, /omni_ledger_journals/)
+})
