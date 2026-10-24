@@ -4,14 +4,15 @@ from pathlib import Path
 import sqlite3
 import unittest
 
-SCHEMA = Path(__file__).resolve().parents[1] / "migrations" / "0001_core.sql"
+MIGRATIONS = sorted((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql"))
 
 
 class OmniPointCoreSchemaTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("PRAGMA foreign_keys = ON")
-        self.db.executescript(SCHEMA.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:
+            self.db.executescript(migration.read_text(encoding="utf-8"))
 
     def tearDown(self):
         self.db.close()
@@ -96,6 +97,30 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
         ).fetchone()[0], 1)
         self.assertEqual(self.db.execute(
             "SELECT COUNT(*) FROM omni_retail_sale_lines WHERE sale_id='sale-fail'"
+        ).fetchone()[0], 0)
+
+    def test_sale_cannot_use_product_from_another_company(self):
+        self.db.execute(
+            """INSERT INTO omni_products
+               (id, sku, name, category, cost_price, selling_price, quantity_on_hand, company_id)
+               VALUES ('p-company-a', 'SKU-COMPANY-A', 'Company A item', 'Test', 100, 200, 5, 'company-a')"""
+        )
+        self.db.execute(
+            """INSERT INTO omni_retail_sales
+               (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id, company_id)
+               VALUES ('sale-company-b', 'OP-COMPANY-B', 200, 200, 'CASH', 'company-b-idempotency', 'staff-b', 'company-b')"""
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                """INSERT INTO omni_retail_sale_lines
+                   (id, sale_id, product_id, sku_snapshot, name_snapshot, quantity, unit_price, unit_cost, line_total)
+                   VALUES ('line-cross-company', 'sale-company-b', 'p-company-a', 'SKU-COMPANY-A', 'Company A item', 1, 200, 100, 200)"""
+            )
+        self.assertEqual(self.db.execute(
+            "SELECT quantity_on_hand FROM omni_products WHERE id='p-company-a'"
+        ).fetchone()[0], 5)
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM omni_retail_sale_lines WHERE sale_id='sale-company-b'"
         ).fetchone()[0], 0)
 
     def test_staff_role_and_idempotency_constraints(self):
