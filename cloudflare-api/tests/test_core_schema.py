@@ -168,5 +168,24 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             )
 
 
+    def test_api_readiness_columns_exist_after_all_review_migrations(self):
+        required = {
+            "omni_products": {"id", "sku", "name", "cost_price", "selling_price", "quantity_on_hand", "reorder_level", "is_active", "company_id"},
+            "omni_retail_sales": {"id", "receipt_number", "status", "total", "idempotency_key", "actor_id", "company_id"},
+            "omni_retail_sale_lines": {"id", "sale_id", "product_id", "quantity", "line_total"},
+            "omni_stock_movements": {"id", "product_id", "actor_id", "movement_type", "quantity_delta", "quantity_after", "company_id"},
+            "omni_agency_transactions": {"id", "provider_status", "amount", "company_id"},
+            "omni_ledger_entries": {"id", "ledger_type", "debit", "credit", "idempotency_key", "company_id"},
+            "omni_reconciliation_sessions": {"id", "ledger_type", "business_date", "company_id"},
+            "omni_audit_events": {"id", "actor_id", "action", "request_id", "company_id"},
+            "omni_staff_memberships": {"id", "identity_subject", "company_id", "branch_id", "role", "status", "display_name", "email", "agent_id"},
+        }
+        for table, expected_columns in required.items():
+            with self.subTest(table=table):
+                actual = {
+                    row[1] for row in self.db.execute(f"PRAGMA table_info({table})")
+                }
+                self.assertTrue(expected_columns.issubset(actual), expected_columns - actual)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
