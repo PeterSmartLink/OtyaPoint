@@ -65,7 +65,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <h1 style={styles.title}>Inventory workspace</h1>
           <p style={styles.muted}>Live product records from OmniPoint&apos;s database, with auditable stock changes.</p>
         </div>
-        <div style={styles.livePill}><span style={styles.dot} /> CLOUDFLARE D1</div>
+        <div style={styles.livePill}><span style={styles.dot} /> {cloudflareError ? "NOT CONNECTED" : "CLOUDFLARE D1"}</div>
       </header>
 
       <div style={styles.notice}>
