@@ -34,15 +34,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
     "content-security-policy": "default-src 'none'; frame-ancestors 'none'"
   }
 });
-const b64url = (bytes: Uint8Array) => {
-  let raw = "";
-  for (const byte of bytes) raw += String.fromCharCode(byte);
-  return btoa(raw).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
-};
-const decode = (value: string) => {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(atob(normalized + "=".repeat((4 - normalized.length % 4) % 4)), c => c.charCodeAt(0));
-};
 const uuid = () => crypto.randomUUID();
 const safeText = (value: unknown, max = 180) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const int = (value: unknown, min = 0) => Number.isSafeInteger(value) && Number(value) >= min ? Number(value) : null;
