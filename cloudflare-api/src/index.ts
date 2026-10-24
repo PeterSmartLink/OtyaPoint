@@ -21,7 +21,7 @@ export interface Env {
   AUTH?: { fetch(request: Request): Promise<Response> };
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string };
+type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string; display_name: string; email: string | null; agent_id: string | null; verified_email?: string | null };
 const roles: Role[] = ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -57,10 +57,10 @@ async function authenticate(request: Request, env: Env): Promise<Staff | Respons
       return json({ error: "unauthorized" }, 401);
     }
     const staff = await env.DB.prepare(
-      "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
+      "SELECT id, identity_subject, company_id, branch_id, role, status, display_name, email, agent_id FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
     ).bind(verified.user_id).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
-    return staff;
+    return { ...staff, verified_email: typeof verified.email === "string" ? verified.email : null };
   } catch {
     return json({ error: "auth_service_unavailable" }, 503);
   }
@@ -103,6 +103,23 @@ export default {
     if (isResponse(staff)) return staff;
 
     try {
+      if (request.method === "GET" && url.pathname === "/api/me") {
+        return json({
+          data: {
+            id: staff.id,
+            identitySubject: staff.identity_subject,
+            companyId: staff.company_id,
+            branchId: staff.branch_id,
+            role: staff.role,
+            status: staff.status,
+            displayName: staff.display_name || staff.verified_email || staff.email || staff.identity_subject,
+            email: staff.verified_email || staff.email,
+            agentId: staff.agent_id
+          },
+          requestId: rid
+        });
+      }
+
       if (request.method === "GET" && url.pathname === "/api/products") {
         const result = await env.DB.prepare(
           "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 AND company_id = ?1 ORDER BY name LIMIT 500"
