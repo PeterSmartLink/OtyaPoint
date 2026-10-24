@@ -57,9 +57,6 @@ BEGIN
        != COALESCE((SELECT SUM(credit) FROM omni_ledger_entries WHERE journal_id = NEW.id), 0)
       THEN RAISE(ABORT, 'LEDGER_JOURNAL_UNBALANCED')
   END;
-  UPDATE omni_ledger_journals
-     SET posted_at = COALESCE(NEW.posted_at, CURRENT_TIMESTAMP)
-   WHERE id = NEW.id;
 END;
 
 -- Posted journals and their entries are immutable; corrections use compensating journals.
