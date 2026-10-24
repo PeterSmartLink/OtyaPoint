@@ -36,8 +36,7 @@ queue = "omnipoint-jobs"
 # authorization contract, idempotency and retry/DLQ behavior pass tests.
 
 
-# Validate Otya access tokens through the existing Auth Worker; do not duplicate
-# passwords, signing keys or refresh-token storage in OmniPoint.
-[[services]]
-binding = "AUTH"
-service = "otya-auth"
+
+# Set this as a Worker secret with `wrangler secret put OMNIPOINT_API_HMAC_SECRET`.
+# Use the same high-entropy value in the server-only Vercel environment variable.
+# Never place the secret in this file or any NEXT_PUBLIC_ variable.
