@@ -11,7 +11,8 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("PRAGMA foreign_keys = ON")
-        for migration in MIGRATIONS:\n            self.db.executescript(migration.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:
+            self.db.executescript(migration.read_text(encoding="utf-8"))
 
     def tearDown(self):
         self.db.close()
@@ -38,6 +39,8 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
         }.issubset(tables))
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM omni_products").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM omni_retail_sales").fetchone()[0], 0)
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(omni_staff_memberships)")}
+        self.assertTrue({"email", "display_name", "agent_id", "identity_status", "approved_by", "approved_at", "phone"}.issubset(columns))
 
     def test_opening_stock_and_adjustment_are_applied_by_audited_movement(self):
         self.add_product()
@@ -109,6 +112,10 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                 """INSERT INTO omni_staff_memberships
                    (id, identity_subject, company_id, role, status)
                    VALUES ('staff-2', 'subject-1', 'company-1', 'ATTENDANT', 'ACTIVE')"""
+            )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                "UPDATE omni_staff_memberships SET status='ACTIVE', identity_status='VERIFIED' WHERE id='staff-1'"
             )
         self.add_product()
         self.db.execute(
