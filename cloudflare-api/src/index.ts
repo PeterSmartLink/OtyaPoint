@@ -21,7 +21,7 @@ export interface Env {
   AUTH?: { fetch(request: Request): Promise<Response> };
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string; email: string | null; display_name: string | null; agent_id: string | null; identity_status: string };
+type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string; email: string | null; display_name: string | null; agent_id: string | null; identity_status: string; phone: string | null; approved_by: string | null; approved_at: string | null };
 const roles: Role[] = ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"];
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -39,6 +39,7 @@ const safeText = (value: unknown, max = 180) => typeof value === "string" ? valu
 const int = (value: unknown, min = 0) => Number.isSafeInteger(value) && Number(value) >= min ? Number(value) : null;
 const isRole = (value: unknown): value is Role => typeof value === "string" && roles.includes(value as Role);
 const canManage = (staff: Staff) => ["SOVEREIGN", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(staff.role);
+const canManageStaff = (staff: Staff) => ["SOVEREIGN", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(staff.role);
 const isResponse = (value: Staff | Response): value is Response => value instanceof Response;
 
 async function authenticate(request: Request, env: Env): Promise<Staff | Response> {
@@ -57,7 +58,7 @@ async function authenticate(request: Request, env: Env): Promise<Staff | Respons
       return json({ error: "unauthorized" }, 401);
     }
     const staff = await env.DB.prepare(
-      "SELECT id, identity_subject, company_id, branch_id, role, status, email, display_name, agent_id, identity_status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
+      "SELECT id, identity_subject, company_id, branch_id, role, status, email, display_name, agent_id, identity_status, phone, approved_by, approved_at FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
     ).bind(verified.user_id).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || staff.identity_status !== "VERIFIED" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
     return staff;
@@ -115,10 +116,86 @@ export default {
             displayName: staff.display_name,
             agentId: staff.agent_id,
             identityStatus: staff.identity_status,
-            isActive: staff.status === "ACTIVE"
+            isActive: staff.status === "ACTIVE",
+            phone: staff.phone,
+            approvedBy: staff.approved_by,
+            approvedAt: staff.approved_at
           },
           requestId: rid
         });
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/staff") {
+        if (!canManageStaff(staff)) return json({ error: "forbidden" }, 403);
+        const result = await env.DB.prepare(
+          "SELECT id,email,display_name,agent_id,phone,role,status,identity_status,created_at,approved_at FROM omni_staff_memberships WHERE company_id=?1 ORDER BY status ASC, created_at DESC LIMIT 200"
+        ).bind(staff.company_id).all();
+        return json({ data: result.results, count: result.results.length, requestId: rid });
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/staff") {
+        if (!canManageStaff(staff)) return json({ error: "forbidden" }, 403);
+        const body = await parseBody(request); if (isBodyResponse(body)) return body;
+        const identitySubject = safeText(body.identitySubject, 256);
+        const email = safeText(body.email, 254).toLowerCase();
+        const displayName = safeText(body.displayName, 120);
+        const agentId = safeText(body.agentId, 12).toUpperCase();
+        const phone = safeText(body.phone, 32) || null;
+        const role = safeText(body.role, 32);
+        const companyId = safeText(body.companyId, 128) || staff.company_id;
+        const branchId = safeText(body.branchId, 128) || null;
+        if (!identitySubject || !email.includes("@") || !displayName || !/^[A-Z0-9]{6,12}$/.test(agentId) ||
+            !["ATTENDANT", "MANAGER"].includes(role) || companyId !== staff.company_id ||
+            identitySubject === staff.identity_subject) return json({ error: "invalid_staff" }, 400);
+        const duplicate = await env.DB.prepare(
+          "SELECT id FROM omni_staff_memberships WHERE identity_subject=?1 OR lower(email)=lower(?2) OR agent_id=?3 LIMIT 1"
+        ).bind(identitySubject, email, agentId).first<{ id: string }>();
+        if (duplicate) return json({ error: "staff_conflict" }, 409);
+        const id = uuid();
+        try {
+          await env.DB.batch([
+            env.DB.prepare(
+              "INSERT INTO omni_staff_memberships (id,identity_subject,company_id,branch_id,role,status,identity_status,created_by,email,display_name,agent_id,phone) VALUES (?1,?2,?3,?4,?5,'PENDING','PENDING',?6,?7,?8,?9,?10)"
+            ).bind(id, identitySubject, companyId, branchId, role, staff.id, email, displayName, agentId, phone),
+            env.DB.prepare(
+              "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id) VALUES (?1,?2,'CREATE','STAFF_MEMBERSHIP',?3,'Management created a pending staff record',?4,?5)"
+            ).bind(uuid(), staff.id, id, JSON.stringify({ email, displayName, agentId, role, companyId, branchId, status: "PENDING" }), rid)
+          ]);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "staff_conflict" }, 409);
+          throw error;
+        }
+        return json({ data: { id, email, displayName, agentId, role, status: "PENDING", identityStatus: "PENDING" }, requestId: rid }, 201);
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/staff/review") {
+        if (!canManageStaff(staff)) return json({ error: "forbidden" }, 403);
+        const body = await parseBody(request); if (isBodyResponse(body)) return body;
+        const targetId = safeText(body.staffId, 64);
+        const decision = safeText(body.decision, 16);
+        const reason = safeText(body.reason, 500);
+        if (!targetId || !["approve", "reject"].includes(decision) || !reason) return json({ error: "invalid_review" }, 400);
+        const target = await env.DB.prepare(
+          "SELECT id,identity_subject,email,role,status,identity_status,company_id FROM omni_staff_memberships WHERE id=?1 LIMIT 1"
+        ).bind(targetId).first<{ id: string; identity_subject: string; email: string | null; role: Role; status: string; identity_status: string; company_id: string }>();
+        if (!target || target.company_id !== staff.company_id) return json({ error: "staff_not_found" }, 404);
+        if (target.id === staff.id || target.identity_subject === staff.identity_subject) return json({ error: "self_approval_denied" }, 409);
+        if (target.status !== "PENDING" || target.identity_status !== "PENDING") return json({ error: "staff_already_reviewed" }, 409);
+        const approved = decision === "approve";
+        try {
+          await env.DB.batch([
+            env.DB.prepare(
+              "UPDATE omni_staff_memberships SET status=?1,identity_status=?2,approved_by=?3,approved_at=?4,updated_at=CURRENT_TIMESTAMP WHERE id=?5 AND status='PENDING' AND identity_status='PENDING'"
+            ).bind(approved ? "ACTIVE" : "REVOKED", approved ? "VERIFIED" : "REJECTED", staff.id, approved ? new Date().toISOString() : null, target.id),
+            env.DB.prepare(
+              "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id) VALUES (?1,?2,?3,'STAFF_IDENTITY',?4,?5,?6,?7,?8)"
+            ).bind(uuid(), staff.id, approved ? "APPROVE" : "REJECT", target.id, reason, JSON.stringify({ status: target.status, identityStatus: target.identity_status }), JSON.stringify({ status: approved ? "ACTIVE" : "REVOKED", identityStatus: approved ? "VERIFIED" : "REJECTED" }), rid)
+          ]);
+        } catch (error) {
+          if (error instanceof Error && (error.message.includes("STAFF_ALREADY_REVIEWED") || error.message.includes("INVALID_STAFF_REVIEW_STATE"))) return json({ error: "staff_already_reviewed" }, 409);
+          throw error;
+        }
+        return json({ data: { id: target.id, status: approved ? "ACTIVE" : "REVOKED", identityStatus: approved ? "VERIFIED" : "REJECTED" }, requestId: rid });
       }
 
       if (request.method === "GET" && url.pathname === "/api/products") {
