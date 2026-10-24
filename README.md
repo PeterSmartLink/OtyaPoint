@@ -6,7 +6,7 @@ OmniPoint is a standalone retail and fintech agency operations platform for Ugan
 
 The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API work is now being developed as an isolated service with its own schema and configuration. It is not yet connected to the production dashboard and is not ready to execute mobile-money or bill-payment operations.
 
-The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
+The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. OmniPoint business records are company-scoped in the D1 schema and API; stock-sale triggers reject cross-company product use. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
 
 **Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Staff token issuance, Otya Auth integration, secure staff provisioning, end-to-end POS tests, backup/restore, and operational approval remain release gates.
 
