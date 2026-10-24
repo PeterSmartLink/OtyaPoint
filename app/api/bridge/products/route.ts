@@ -1,50 +1,36 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Same-origin bridge from the existing Supabase-authenticated website to the
- * isolated Cloudflare API. It fails closed unless both server-only settings
- * are configured. Never expose the HMAC secret to browser code.
+ * Same-origin bridge to the isolated Cloudflare API.
+ *
+ * Forward only a real short-lived access token issued by Otya Auth. Never mint
+ * a local JWT from the Vercel staff profile or trust a browser-supplied role.
+ * The OmniPoint Worker validates the token through Otya Auth and then resolves
+ * the local company/branch/role membership from OmniPoint D1.
+ *
+ * The login flow must set the HttpOnly otya_access_token cookie before this
+ * route can return live inventory. Until then this endpoint fails closed.
  */
-function base64url(value: string | Buffer) {
-  return Buffer.from(value).toString("base64url");
-}
-
-function makeToken(subject: string, role: string, secret: string) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = base64url(JSON.stringify({
-    sub: subject,
-    role,
-    iat: now,
-    exp: now + 300,
-    iss: "omnipoint",
-    aud: "omnipoint-api",
-  }));
-  const unsigned = `${header}.${payload}`;
-  const signature = createHmac("sha256", secret).update(unsigned).digest("base64url");
-  return `${unsigned}.${signature}`;
-}
-
 export async function GET() {
   const apiUrl = process.env.OMNIPOINT_CLOUDFLARE_API_URL;
-  const secret = process.env.OMNIPOINT_API_HMAC_SECRET;
-
-  if (!apiUrl || !secret) {
+  if (!apiUrl) {
     return NextResponse.json(
       { error: "cloudflare_bridge_not_configured", message: "Cloudflare API bridge is not configured yet." },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  let staff;
-  try {
-    staff = await requireStaff();
-  } catch {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  const jar = await cookies();
+  const accessToken = jar.get("otya_access_token")?.value;
+  if (!accessToken || accessToken.length > 8192 || /\s/.test(accessToken)) {
+    return NextResponse.json(
+      { error: "otya_auth_required", message: "Sign in through Otya Auth before accessing live inventory." },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   try {
@@ -52,7 +38,7 @@ export async function GET() {
     const response = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${makeToken(staff.id, staff.role, secret)}`,
+        Authorization: `Bearer ${accessToken}`,
         "X-Request-ID": randomUUID(),
         Accept: "application/json",
       },
