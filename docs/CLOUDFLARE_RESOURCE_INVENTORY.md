@@ -6,8 +6,8 @@ Audit date: 2026-10-24 UTC. This snapshot was collected from the connected Cloud
 
 | Resource | Name | Identifier / notes | Current assessment |
 | --- | --- | --- | --- |
-| D1 | omnipoint-prod | 65868e64-ff39-4ed3-91de-59c237cd9cb0; EU jurisdiction | Contains nine `omni_*` core tables, indexes and stock triggers. The schema is **not** empty. Production columns lag behind the test schema, including missing company-scope columns on several operational tables. Do not deploy the current Worker until schema parity and migration history are reconciled. |
-| D1 | omnipoint-migration-test | 43d274ce-d46e-462f-bcef-59b93caefc21; EU jurisdiction | Contains legacy tables (`Product`, `RetailSale`, `User`, etc.) plus the newer `omni_*` schema and extra staff-review triggers. This is not a clean single-schema test baseline; document and test the intended migration path. |
+| D1 | omnipoint-prod | 65868e64-ff39-4ed3-91de-59c237cd9cb0; EU jurisdiction | Contains nine `omni_*` core tables, indexes and stock triggers. The schema is **not** empty. Production lacks `company_id` on products, sales, stock movements, agency transactions, ledger entries, reconciliation sessions and audit events. Production has no `d1_migrations` table. Do not deploy the current Worker until schema parity and a safe migration-history strategy are reconciled. |
+| D1 | omnipoint-migration-test | 43d274ce-d46e-462f-bcef-59b93caefc21; EU jurisdiction | Contains legacy tables (`Product`, `RetailSale`, `User`, etc.) plus the newer `omni_*` schema and extra staff-review fields. Its `d1_migrations` records only `0001_core.sql` and `0002_company_scope.sql`, despite already having staff-profile/review columns. This is schema drift, not a reliable migration baseline. |
 | R2 | omnipoint-private | private operational documents/receipts/exports target | Bucket exists; application access controls, signed/short-lived URLs, content validation and lifecycle are not verified. |
 | R2 | omnipoint-backups | reserved backup target | Bucket exists; scheduled export, encryption, access control, retention, alerts and restore drills are not verified. |
 | KV | omnipoint-cache | cc30449e4a93428c989a564cebf80417; EU jurisdiction | Namespace exists; use only for reconstructable/short-lived data. |
@@ -28,7 +28,7 @@ The existing Otya resources serve separate workloads. They must not be renamed, 
 ## Key findings
 
 1. The earlier claim that `omnipoint-prod` has zero tables is incorrect. Read-only SQL found the core `omni_*` tables and triggers in production.
-2. The production D1 schema is behind the migration-test schema. Several tables in test have `company_id` columns missing from production; staff profile/review columns also differ. This is a release blocker because the API expects company-scoped records.
+2. The production D1 schema is behind the migration-test schema. Production lacks `company_id` on seven operational tables, and has no `d1_migrations` history table. The test database records only migrations 0001 and 0002 despite having staff-profile/review columns that are not fully explained by the checked-in 0003 migration. This is a release blocker because the API expects company-scoped records.
 3. The test D1 contains legacy schema tables and the new schema side by side. Tests must specify which schema is authoritative and prove the migration sequence from a clean database.
 4. No dedicated OmniPoint Worker appeared in the Worker inventory. Existing `otya-core` has production routes/bindings and must not be expanded for OmniPoint by default.
 5. OmniPoint queues exist but are unattached. Producer/consumer configuration, retry limits, idempotency and DLQ handling need isolated integration tests.
@@ -38,7 +38,7 @@ The existing Otya resources serve separate workloads. They must not be renamed, 
 
 ## Required next checks
 
-- Compare the exact deployed D1 schemas to reviewed migration files; create a forward-only migration for missing company/branch scoping and staff fields in a clean isolated test database first.
+- Reconcile the exact deployed D1 schemas with checked-in migrations and define a migration-history strategy. Rebuild a disposable D1 from empty using only checked-in SQL; compare every table/column/index/trigger against the test database before proposing any production migration.
 - Review every API query and write for company/branch scoping; verify tenant isolation with adversarial tests before any Worker deployment.
 - Inspect the Supabase/PostgreSQL schema read-only and classify it as legacy/recovery data; do not dual-write or delete data.
 - Verify the Otya Auth issuer, audience, signing-key rotation and revocation contract before integrating shared identity.
