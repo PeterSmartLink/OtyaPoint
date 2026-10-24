@@ -34,3 +34,10 @@ queue = "omnipoint-jobs"
 
 # Intentionally no custom domain and no queue consumer until the API,
 # authorization contract, idempotency and retry/DLQ behavior pass tests.
+
+
+# Validate Otya access tokens through the existing Auth Worker; do not duplicate
+# passwords, signing keys or refresh-token storage in OmniPoint.
+[[services]]
+binding = "AUTH"
+service = "otya-auth"
