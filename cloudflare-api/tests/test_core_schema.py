@@ -4,14 +4,14 @@ from pathlib import Path
 import sqlite3
 import unittest
 
-SCHEMA = Path(__file__).resolve().parents[1] / "migrations" / "0001_core.sql"
+MIGRATIONS = sorted((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql"))
 
 
 class OmniPointCoreSchemaTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("PRAGMA foreign_keys = ON")
-        self.db.executescript(SCHEMA.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:\n            self.db.executescript(migration.read_text(encoding="utf-8"))
 
     def tearDown(self):
         self.db.close()
