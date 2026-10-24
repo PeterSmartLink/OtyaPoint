@@ -1,80 +1,68 @@
 # OmniPoint
 
-OmniPoint is a new, standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
+OmniPoint is a standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
 
-## Current status
+## Current implementation status
 
-The repository currently contains a **frontend prototype** with a responsive dashboard, sample inventory, navigation between planned workflows, a demo retail cart selector, a local-only fintech draft form, and a light/dark theme toggle. It is not a production-ready financial system. Sample records are illustrative, and no payment, inventory, ledger, export, EFRIS, or Telegram backend is connected. A Supabase Auth sign-in foundation has been added but still requires environment configuration, staff provisioning, and verification before it can be used.
+The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API work is now being developed as an isolated service with its own schema and configuration. It is not yet connected to the production dashboard and is not ready to execute mobile-money or bill-payment operations.
 
-## Run locally
+The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
+
+**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Staff token issuance, Otya Auth integration, secure staff provisioning, end-to-end POS tests, backup/restore, and operational approval remain release gates.
+
+## Architecture direction
+
+- **Cloudflare-first runtime and data:** a dedicated OmniPoint Worker, D1 for relational operational data, private R2 for protected documents/receipts/exports, KV only for reconstructable short-lived state, and Queues for retryable asynchronous work.
+- **Shared Otya identity, separate authorization:** use the approved Otya Auth identity flow where appropriate, then map the verified identity to an active OmniPoint staff membership and locally assigned role.
+- **Isolated business data:** OmniPoint products, stock, sales, agency operations, reconciliation and ledgers are not stored in Otya Auth/Core/Player databases.
+- **Separate ledgers:** retail sales and cost of goods are distinct from agency cash, float, provider settlement and commissions.
+- **Provider truth:** an agency transaction is not successful until a verified provider response/status confirms it. Provider execution remains disabled until partner contracts, credentials, callbacks, reconciliation and compliance controls are implemented.
+- **Offline-friendly counter:** the staff interface should be touch-friendly and handle poor connectivity without pretending that an unconfirmed transaction succeeded.
+
+See [the ecosystem contract](docs/ECOSYSTEM_CONTRACT.md), [the Cloudflare inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md), and [the implementation gates](docs/OMNIPOINT_BUILD_GATES.md).
+
+## Development
 
 Requirements: Node.js 20.9+ and npm.
 
-```bash
+```sh
 npm install
 npm run dev
 ```
 
 Open http://localhost:3000.
 
-Build verification:
+Existing application checks:
 
-```bash
+```sh
 npm run db:validate
 npm run lint
 npm run build
+python3 migration/d1/test_schema.py
+python3 cloudflare-api/tests/test_core_schema.py
 ```
 
-The CI workflow checks migration filenames for the required 14-digit timestamp and rejects duplicate migration versions. All four migration filenames match the versions recorded in the connected Supabase project, including the foreign-key index migration applied on 2026-10-17 UTC. Do not rename or edit an applied migration; add a new, later migration for schema changes. Do not rename or edit an applied migration; add a new, later migration for schema changes.
+## Cloudflare API work
 
-## Environment configuration
+- `wrangler.toml` and the existing `cloudflare-api` scaffold remain the isolated migration-test setup for earlier experiments.
+- `wrangler.omnipoint.test.toml` describes the dedicated test configuration for the new API/schema work.
+- `wrangler.omnipoint.toml` describes the proposed dedicated production Worker bindings. Do not deploy this configuration until the release gates are satisfied.
+- The production config has no custom domain. Do not bind OmniPoint records into the shared `otya-core` Worker by default.
+- Business routes require a short-lived signed bearer token and an active local staff record. No public bootstrap-admin route exists.
+- Cash POS posting is designed to use one D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Validate concurrency and failure rollback in CI and an isolated environment before production use.
+- Agency transactions deliberately return a disabled response until verified provider adapters and status reconciliation are ready.
 
-Set `DATABASE_URL` in `.env.local` for local Prisma access and as an encrypted environment variable in Vercel for each required deployment target (Production, Preview, and Development). Use the database connection string from Supabase project settings; never commit it or paste it into chat. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are the browser-safe Auth configuration, not database credentials. A successful build does not prove the database is reachable or staff access is configured.
+## Data migration and recovery
 
-## Secure staff onboarding
+The older PostgreSQL/Supabase implementation must be treated as a legacy source/recovery copy during this transition, not as a second live writer. Do not dual-write financial records to PostgreSQL and D1. Do not delete the existing Supabase project or its records as part of this feature branch.
 
-- Public self-registration is not available. Only a verified Managing Director or Chairman can invite staff from `/management/staff`.
-- Invitations use Supabase Auth Admin and require `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel environment variable. Never expose this key with a `NEXT_PUBLIC_` prefix or commit it to Git.
-- New staff profiles are inactive and have `PENDING` identity status. Login is denied until management records identity verification and activates the profile.
-- The unique agent ID is 6–12 uppercase letters/digits (for example, `2IQ35198`). Email and agent ID must both be unique.
-- Verify national ID and required documents through the organization’s approved process. This implementation deliberately does not store raw national ID numbers or identity-document images.
-- The first management administrator must be provisioned manually through the Supabase Dashboard and matching Prisma staff profile, with verified status and active access. Never add a public bootstrap-admin endpoint.
-- Audit events record invitations and approval/rejection decisions. These application controls do not replace independent security review or regulatory/provider approval.
+Before cutover, export and verify the approved data set, compare row counts and business invariants, test an isolated restore, and choose one writable primary. Follow the [Cloudflare resource inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md) and [build gates](docs/OMNIPOINT_BUILD_GATES.md).
 
-## Required environment variables
+## Business and security boundaries
 
-- `DATABASE_URL` — server-side PostgreSQL connection string.
-- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL.
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase publishable/anon key for user sessions.
-- `SUPABASE_SERVICE_ROLE_KEY` — server-only Supabase Admin key, required for invitations; set as an encrypted Vercel environment variable for the required deployment environments.
-
-Never commit environment files or secrets. After changing the Prisma schema, run `npm run db:validate`, `npm run db:generate`, and apply the migration using the approved migration process.
-
-## Product boundaries
-
-- **Retail ledger:** product sales, inventory, cost of goods sold, and EFRIS invoice metadata.
-- **Fintech agency ledger:** cash-in/out records, float movements, and earned commissions.
-- **Strict separation:** retail sales and agency transactions must never be silently merged.
-- **Auditability:** privileged actions require authorization and leave an audit trail.
-- **Provider truth:** a locally recorded transaction is not represented as successful until the relevant provider confirms it.
-
-## Initial architecture
-
-- Responsive web application for touch-friendly counter use.
-- TypeScript frontend and API boundary.
-- PostgreSQL relational data model (not yet implemented).
-- Role-based access control for attendants, managers, directors, and the root administrator (not yet implemented).
-- Provider adapters for future MTN, Airtel, EFRIS, and Telegram integrations.
-
-## Security and project isolation
-
-This repository is the independent home for OmniPoint. Do not import Otya application code, databases, credentials, or production configuration. Never commit real credentials. Financial transaction execution, EFRIS compliance, and telecom integrations require approved access, provider-specific implementation, and verification before production use.
-
-## Planned delivery sequence
-
-1. Foundation, environment configuration, and security boundaries.
-2. Authentication, users, roles, and audit events.
-3. Retail catalog, inventory, and POS.
-4. Fintech agency ledger and reconciliation.
-5. Reports, exports, and management dashboards.
-6. Provider integrations, automated tests, and deployment hardening.
+- Public self-registration is not allowed for staff.
+- Staff access must be provisioned through a secure owner/management process.
+- Roles and branch permissions are read from server-side OmniPoint records, never trusted from browser payloads.
+- Do not store raw national ID numbers or identity-document images unless an approved, compliant requirement is established.
+- Never commit credentials, database URLs, signing keys, provider secrets, or production data.
+- No EFRIS, mobile-money, airtime or bill-payment integration should be represented as live until provider approval and end-to-end verification are complete.
