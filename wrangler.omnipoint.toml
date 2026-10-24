@@ -1,7 +1,7 @@
 name = "omnipoint-api"
 main = "cloudflare-api/src/index.ts"
 compatibility_date = "2026-10-23"
-workers_dev = true
+workers_dev = false
 keep_vars = true
 
 [observability]
@@ -32,8 +32,9 @@ id = "cc30449e4a93428c989a564cebf80417"
 binding = "JOBS"
 queue = "omnipoint-jobs"
 
-# Intentionally no custom domain and no queue consumer until the API,
+# Intentionally no public workers.dev URL or custom domain until the API,
 # authorization contract, idempotency and retry/DLQ behavior pass tests.
+# This is a source-config safeguard only; it does not change the deployed environment.
 
 
 # Validate Otya access tokens through the existing Auth Worker; do not duplicate
