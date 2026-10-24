@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/auth";
+import { omnipointApiRequest } from "@/lib/omnipoint-api";
 
 const INVENTORY_ROLES = new Set(["MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN", "SOVEREIGN"]);
 
@@ -38,6 +39,21 @@ export async function createProductAction(formData: FormData) {
     !/^\d{1,9}$/.test(openingStockText) || !Number.isSafeInteger(openingStock) || openingStock < 0 ||
     !/^\d{1,9}$/.test(reorderLevelText) || !Number.isSafeInteger(reorderLevel) || reorderLevel < 0
   ) redirect("/inventory?error=invalid");
+
+  if (process.env.OMNIPOINT_AUTH_MODE === "otya") {
+    if (!Number.isSafeInteger(cost) || !Number.isSafeInteger(selling)) redirect("/inventory?error=invalid");
+    const response = await omnipointApiRequest("/api/products", {
+      method: "POST",
+      body: JSON.stringify({
+        sku, name, category: category || "General",
+        costPrice: cost, sellingPrice: selling, openingStock, reorderLevel,
+      }),
+    });
+    if (!response) redirect("/inventory?error=save-failed");
+    if (response.status === 409) redirect("/inventory?error=duplicate-sku");
+    if (!response.ok) redirect("/inventory?error=save-failed");
+    redirect("/inventory?success=product-created");
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -109,6 +125,18 @@ export async function adjustStockAction(formData: FormData) {
     !reason ||
     reason.length < 4
   ) redirect("/inventory?error=invalid-adjustment");
+
+  if (process.env.OMNIPOINT_AUTH_MODE === "otya") {
+    const response = await omnipointApiRequest("/api/stock-adjustments", {
+      method: "POST",
+      body: JSON.stringify({ productId, quantityDelta: delta, reason }),
+    });
+    if (!response) redirect("/inventory?error=adjustment-failed");
+    if (response.status === 404) redirect("/inventory?error=product-not-found");
+    if (response.status === 409) redirect("/inventory?error=insufficient-stock");
+    if (!response.ok) redirect("/inventory?error=adjustment-failed");
+    redirect("/inventory?success=stock-updated");
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
