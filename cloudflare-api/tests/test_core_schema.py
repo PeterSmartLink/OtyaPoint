@@ -123,6 +123,25 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             "SELECT COUNT(*) FROM omni_retail_sale_lines WHERE sale_id='sale-company-b'"
         ).fetchone()[0], 0)
 
+    def test_staff_profile_metadata_and_agent_id_uniqueness(self):
+        self.db.execute(
+            """INSERT INTO omni_staff_memberships
+               (id, identity_subject, company_id, role, status, display_name, email, agent_id)
+               VALUES ('staff-profile-1', 'otya-user-1', 'company-1', 'MANAGER', 'ACTIVE',
+                       'Test Manager', 'manager@example.invalid', 'AGENT001')"""
+        )
+        row = self.db.execute(
+            """SELECT display_name, email, agent_id
+               FROM omni_staff_memberships WHERE id='staff-profile-1'"""
+        ).fetchone()
+        self.assertEqual(row, ("Test Manager", "manager@example.invalid", "AGENT001"))
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute(
+                """INSERT INTO omni_staff_memberships
+                   (id, identity_subject, company_id, role, status, agent_id)
+                   VALUES ('staff-profile-2', 'otya-user-2', 'company-1', 'ATTENDANT', 'ACTIVE', 'AGENT001')"""
+            )
+
     def test_staff_role_and_idempotency_constraints(self):
         self.db.execute(
             """INSERT INTO omni_staff_memberships
