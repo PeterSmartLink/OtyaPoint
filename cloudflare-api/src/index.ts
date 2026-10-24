@@ -167,8 +167,8 @@ export default {
           env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN quantity_on_hand <= reorder_level THEN 1 ELSE 0 END),0) AS low_stock FROM omni_products WHERE is_active=1 AND company_id=?1").bind(staff.company_id).first<{ count: number; low_stock: number }>(),
           env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM omni_retail_sales WHERE status='COMPLETED' AND company_id=?1").bind(staff.company_id).first<{ count: number; total: number }>(),
           env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN provider_status='SUCCEEDED' THEN amount ELSE 0 END),0) AS succeeded_amount FROM omni_agency_transactions WHERE company_id=?1").bind(staff.company_id).first<{ count: number; succeeded_amount: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='RETAIL' AND company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='FINTECH_AGENCY' AND company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>()
+          env.DB.prepare("SELECT COALESCE(SUM(e.debit),0) AS debit, COALESCE(SUM(e.credit),0) AS credit FROM omni_ledger_entries e JOIN omni_ledger_journals j ON j.id=e.journal_id AND j.status='POSTED' WHERE e.ledger_type='RETAIL' AND e.company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>(),
+          env.DB.prepare("SELECT COALESCE(SUM(e.debit),0) AS debit, COALESCE(SUM(e.credit),0) AS credit FROM omni_ledger_entries e JOIN omni_ledger_journals j ON j.id=e.journal_id AND j.status='POSTED' WHERE e.ledger_type='FINTECH_AGENCY' AND e.company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>()
         ]);
         return json({
           currency: "UGX",
@@ -328,8 +328,8 @@ export default {
         const type = url.searchParams.get("type");
         if (type && type !== "RETAIL" && type !== "FINTECH_AGENCY") return json({ error: "invalid_ledger_type" }, 400);
         const query = type
-          ? env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries WHERE ledger_type=?1 AND company_id=?2 ORDER BY effective_at DESC LIMIT 500").bind(type, staff.company_id)
-          : env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries WHERE company_id=?1 ORDER BY effective_at DESC LIMIT 500").bind(staff.company_id);
+          ? env.DB.prepare("SELECT e.id,e.journal_id,e.ledger_type,e.account_code,e.currency,e.debit,e.credit,e.source_type,e.source_id,e.description,e.effective_at,e.created_at FROM omni_ledger_entries e JOIN omni_ledger_journals j ON j.id=e.journal_id AND j.status='POSTED' WHERE e.ledger_type=?1 AND e.company_id=?2 ORDER BY e.effective_at DESC LIMIT 500").bind(type, staff.company_id)
+          : env.DB.prepare("SELECT e.id,e.journal_id,e.ledger_type,e.account_code,e.currency,e.debit,e.credit,e.source_type,e.source_id,e.description,e.effective_at,e.created_at FROM omni_ledger_entries e JOIN omni_ledger_journals j ON j.id=e.journal_id AND j.status='POSTED' WHERE e.company_id=?1 ORDER BY e.effective_at DESC LIMIT 500").bind(staff.company_id);
         const result = await query.all();
         return json({ data: result.results, requestId: rid });
       }
