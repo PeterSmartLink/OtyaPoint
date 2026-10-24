@@ -281,14 +281,26 @@ export default {
             "INSERT INTO omni_retail_sale_lines (id,sale_id,product_id,sku_snapshot,name_snapshot,quantity,unit_price,unit_cost,line_total) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"
           ).bind(line.id, saleId, line.productId, line.sku, line.name, line.quantity, line.price, line.cost, line.total));
         }
+        const cashJournalId = uuid();
         statements.push(
-          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,'RETAIL','CASH_ON_HAND','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cash received for retail sale',?7),(?5,'RETAIL','SALES_REVENUE','UGX',0,?2,'RETAIL_SALE',?3,?6,'Retail sales revenue',?7)")
-            .bind(uuid(), subtotal, saleId, idempotencyKey + ":cash", uuid(), idempotencyKey + ":revenue", staff.company_id)
+          env.DB.prepare("INSERT INTO omni_ledger_journals (id,company_id,ledger_type,source_type,source_id,idempotency_key,created_by) VALUES (?1,?2,'RETAIL','RETAIL_SALE',?3,?4,?5)")
+            .bind(cashJournalId, staff.company_id, saleId, idempotencyKey + ":cash-journal", staff.id),
+          env.DB.prepare("INSERT INTO omni_ledger_entries (id,journal_id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,?2,'RETAIL','CASH_ON_HAND','UGX',?3,0,'RETAIL_SALE',?4,?5,'Cash received for retail sale',?6),(?7,?2,'RETAIL','SALES_REVENUE','UGX',0,?3,'RETAIL_SALE',?4,?8,'Retail sales revenue',?6)")
+            .bind(uuid(), cashJournalId, subtotal, saleId, idempotencyKey + ":cash", staff.company_id, uuid(), idempotencyKey + ":revenue"),
+          env.DB.prepare("UPDATE omni_ledger_journals SET status='POSTED', posted_at=CURRENT_TIMESTAMP WHERE id=?1 AND status='DRAFT'")
+            .bind(cashJournalId)
         );
-        if (costOfGoods > 0) statements.push(
-          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,'RETAIL','COST_OF_GOODS_SOLD','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cost of goods sold',?7),(?5,'RETAIL','INVENTORY','UGX',0,?2,'RETAIL_SALE',?3,?6,'Inventory relieved at cost',?7)")
-            .bind(uuid(), costOfGoods, saleId, idempotencyKey + ":cogs", uuid(), idempotencyKey + ":inventory", staff.company_id)
-        );
+        if (costOfGoods > 0) {
+          const cogsJournalId = uuid();
+          statements.push(
+            env.DB.prepare("INSERT INTO omni_ledger_journals (id,company_id,ledger_type,source_type,source_id,idempotency_key,created_by) VALUES (?1,?2,'RETAIL','RETAIL_SALE',?3,?4,?5)")
+              .bind(cogsJournalId, staff.company_id, saleId, idempotencyKey + ":cogs-journal", staff.id),
+            env.DB.prepare("INSERT INTO omni_ledger_entries (id,journal_id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,?2,'RETAIL','COST_OF_GOODS_SOLD','UGX',?3,0,'RETAIL_SALE',?4,?5,'Cost of goods sold',?6),(?7,?2,'RETAIL','INVENTORY','UGX',0,?3,'RETAIL_SALE',?4,?8,'Inventory relieved at cost',?6)")
+              .bind(uuid(), cogsJournalId, costOfGoods, saleId, idempotencyKey + ":cogs", staff.company_id, uuid(), idempotencyKey + ":inventory"),
+            env.DB.prepare("UPDATE omni_ledger_journals SET status='POSTED', posted_at=CURRENT_TIMESTAMP WHERE id=?1 AND status='DRAFT'")
+              .bind(cogsJournalId)
+          );
+        }
         statements.push(env.DB.prepare(
           "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'POST_SALE','RETAIL_SALE',?3,'Cash sale posted',?4,?5,?6)"
         ).bind(uuid(), staff.id, saleId, JSON.stringify({ receiptNumber, subtotal, costOfGoods, currency: "UGX" }), rid, staff.company_id));
