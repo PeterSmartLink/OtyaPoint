@@ -2,46 +2,33 @@
 
 ## Direction
 
-- **GitHub** is the canonical code repository.
-- **GitHub Actions** is the primary quality-check workflow.
-- **Supabase** remains the source of truth for PostgreSQL data and staff authentication.
-- **Cloudflare Workers** is the proposed hosting target, subject to compatibility testing.
-- **Vercel** remains the existing fallback until a separately approved migration is verified.
-- **GitLab** is temporary and should not host a second independent development workflow.
+- **Cloudflare** is the target primary runtime and data platform for the new isolated OmniPoint service.
+- **GitHub** is the canonical code repository and GitHub Actions is the primary quality gate.
+- **Otya Auth** remains the shared identity provider only where its verified token contract is compatible; OmniPoint must still maintain local staff memberships and roles.
+- **OmniPoint D1** is a dedicated business database. It must not share operational tables with Otya Auth, Otya Core, Otya Player, or Next.
+- **R2, KV and Queues** are provisioned for private files, short-lived/reconstructable cache, and asynchronous jobs. Application authorization, retention, consumers, retry and restore behavior remain to be verified.
+- **Supabase/PostgreSQL** is the legacy source/recovery copy during cutover planning, not a second live writer. Do not delete or alter it in this branch.
+- **Vercel** remains the existing app hosting path until the frontend is migrated and the replacement runtime is verified. Do not change production routing as part of this branch.
 
-## First working slice: live inventory
+## Current facts
 
-This branch introduces a database-backed inventory workspace at `/inventory`.
+- A dedicated production D1 database exists: omnipoint-prod. This branch has not applied its schema.
+- A separate migration-test D1 database exists. The new namespaced OmniPoint schema was applied there for validation; existing tables from the prior test schema were left untouched.
+- A separate Worker configuration exists for test and production bindings. The production config has no custom domain and has not been deployed by this branch.
+- The API now has protected product reads, product creation, stock adjustment, cash POS posting, summary and ledger reads in code. The token issuer/bridge and staff onboarding path are not complete, so business routes should fail closed until a trusted server-side token issuer and active staff records exist.
+- Agency provider execution remains disabled and returns a non-success response without making provider calls or recording a false success.
+- The dashboard is not yet wired to the new API. Existing PostgreSQL/Supabase runtime code must not be removed until the new UI/API contract and migration/cutover are proven.
 
-- Reads active products from the existing Prisma/Supabase PostgreSQL database.
-- Allows authorized managers and senior management to create products.
-- Records opening stock as a stock movement.
-- Allows authorized staff to adjust stock with a required reason.
-- Prevents an adjustment from making stock negative.
-- Writes the product/stock movement and audit record in a database transaction.
-- Does not create retail sales, execute mobile-money transactions, post ledger entries, or call EFRIS.
-- Uses existing tables and requires no database migration.
+## Quality gates
 
-## Safe preview without production data
+1. Run the existing migration checks and Prisma validation for the legacy application.
+2. Run the new local SQLite schema/invariant test suite.
+3. Pass lint and build checks for the whole app and Worker code.
+4. Validate the D1 migration against the isolated test database.
+5. Verify authentication, role mapping, idempotency, stock concurrency, atomic rollback and ledger balance.
+6. Configure backup exports and perform an isolated restore drill.
+7. Wire the dashboard to the API using a server-side auth bridge, not browser-held secrets.
+8. Deploy preview first, inspect logs and error handling, then plan a separate production release.
+9. Only activate provider integrations after partner approval, credentials, callback verification and reconciliation are implemented.
 
-- `/preview` is a Vercel Preview-only, read-only inventory showcase using fictional sample data hard-coded in the page.
-- It does not call Prisma, Supabase, staff authentication, or any write action; it is not an operational route.
-- The page checks `VERCEL_ENV === "preview"`. On non-preview deployments it shows a restricted message instead of demo inventory.
-- Do not add production `DATABASE_URL` to Preview just to make the demo work. Real inventory at `/inventory` remains staff-protected and requires a separately approved non-production database for interactive testing.
-
-## Important verification
-
-- This branch must pass the existing GitHub Actions checks before it is merged.
-- Test with an isolated development environment and non-production data first.
-- Verify authorization, duplicate SKU handling, insufficient-stock handling, and audit records.
-- Cloudflare compatibility is a separate workstream. The current app uses Next.js 15 and Prisma 6, so the deployment adapter and database connectivity must be verified before changing hosting.
-- Do not connect a custom domain, change DNS, modify production settings, run migrations, or merge to `main` without the owner's approval.
-
-## Planned next slices
-
-1. Complete inventory tests and connect dashboard navigation.
-2. Retail POS with atomic stock deduction, receipt numbering, and balanced retail ledger entries.
-3. Fintech agency records with idempotency, provider-status verification, commissions, and float reconciliation.
-4. Management reports, audit review, and controlled exports.
-5. Provider integrations only after credentials, contracts, and compliance requirements are confirmed.
-6. Cloudflare preview deployment and cutover only after compatibility checks and explicit approval.
+No live provider operations, DNS cutover, production schema migration, or deletion of the legacy data source is part of this branch.
