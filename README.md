@@ -4,11 +4,11 @@ OmniPoint is a standalone retail and fintech agency operations platform for Ugan
 
 ## Current implementation status
 
-The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API work is now being developed as an isolated service with its own schema and configuration. It is not yet connected to the production dashboard and is not ready to execute mobile-money or bill-payment operations.
+The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API is a dedicated service with its own schema and configuration. The inventory page now reads and writes through a server-side bridge to Cloudflare D1; it fails closed rather than falling back to the legacy PostgreSQL database. The wider dashboard and agency operations are not yet production-ready.
 
 The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. OmniPoint business records are company-scoped in the D1 schema and API; stock-sale triggers reject cross-company product use. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
 
-**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Staff token issuance, Otya Auth integration, secure staff provisioning, end-to-end POS tests, backup/restore, and operational approval remain release gates.
+**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Secure D1 staff provisioning, migration from the temporary legacy sign-in bridge to shared Otya Auth, end-to-end POS tests, backup/restore, and operational approval remain release gates.
 
 ## Architecture direction
 
@@ -48,7 +48,7 @@ python3 cloudflare-api/tests/test_core_schema.py
 - `wrangler.omnipoint.test.toml` describes the dedicated test configuration for the new API/schema work.
 - `wrangler.omnipoint.toml` describes the proposed dedicated production Worker bindings. Do not deploy this configuration until the release gates are satisfied.
 - The production config has no custom domain. Do not bind OmniPoint records into the shared `otya-core` Worker by default.
-- Business routes verify the caller's Otya access token through the existing Auth Worker service binding, then require an active local staff record. The browser's role claims are never trusted. No public bootstrap-admin route exists.
+- The current web bridge issues a five-minute HMAC-signed token only after the existing server-side staff session and profile are verified. The Worker verifies the signature and expiry, then loads the authoritative company, branch, role and status from its own D1 staff table. This is a transitional compatibility adapter, not yet the shared Otya Auth login flow. No public bootstrap-admin route exists.
 - Cash POS posting is designed to use one D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Validate concurrency and failure rollback in CI and an isolated environment before production use.
 - Agency transactions deliberately return a disabled response until verified provider adapters and status reconciliation are ready.
 
