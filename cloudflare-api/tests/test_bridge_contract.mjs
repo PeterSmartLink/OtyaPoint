@@ -32,3 +32,12 @@ test('inventory UI never silently substitutes demo products when the live API fa
   assert.doesNotMatch(dashboard, /setProducts\(initialProducts\)/)
   assert.match(dashboard, /sample products are intentionally hidden/)
 })
+
+test('Cloudflare inventory API returns the documented camelCase dashboard fields', () => {
+  const api = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+  for (const field of ['costPrice', 'sellingPrice', 'quantityOnHand', 'reorderLevel', 'isActive']) {
+    assert.match(api, new RegExp(field))
+  }
+  assert.match(api, /quantity_on_hand: number/)
+  assert.match(api, /is_active === 1/)
+})
