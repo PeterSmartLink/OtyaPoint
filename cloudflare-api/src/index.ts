@@ -177,7 +177,7 @@ export default {
         return json({ data: { sessionId: session.id, type, amount, idempotencyKey }, requestId: rid }, 201);
       }
 
-      const closeMatch = url.pathname.match(/^\\/api\\/cash-sessions\\/([A-Za-z0-9_-]+)\\/close$/);
+      const closeMatch = url.pathname.match(/^\/api\/cash-sessions\/([A-Za-z0-9_-]+)\/close$/);
       if (request.method === "POST" && closeMatch) {
         const body = await parseBody(request); if (isBodyResponse(body)) return body;
         const countedCash = int(body.countedCash);
