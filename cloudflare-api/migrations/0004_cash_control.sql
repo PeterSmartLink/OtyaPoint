@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS omni_cash_sessions (
   opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   closed_at TEXT,
   approved_at TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK (
     (status = 'OPEN' AND closed_at IS NULL AND counted_cash IS NULL)
     OR
