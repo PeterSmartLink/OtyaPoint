@@ -59,6 +59,23 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             "SELECT quantity_on_hand FROM omni_products WHERE id='p-test'"
         ).fetchone()[0], 3)
 
+    def test_product_opening_stock_is_recorded_as_a_movement(self):
+        self.add_product()
+        self.db.execute(
+            """INSERT INTO omni_stock_movements
+               (id, product_id, actor_id, movement_type, quantity_delta, quantity_after,
+                unit_cost, reference_type, reference_id, reason, company_id)
+               VALUES ('m-opening-atomic', 'p-test', 'staff-test', 'OPENING', 8, 8,
+                       100, 'PRODUCT_OPENING', 'p-test', 'synthetic opening stock', 'omnipoint-default')"""
+        )
+        self.assertEqual(self.db.execute(
+            "SELECT quantity_on_hand FROM omni_products WHERE id='p-test'"
+        ).fetchone()[0], 8)
+        movement = self.db.execute(
+            "SELECT quantity_delta, quantity_after, movement_type FROM omni_stock_movements WHERE id='m-opening-atomic'"
+        ).fetchone()
+        self.assertEqual(movement, (8, 8, "OPENING"))
+
     def test_sale_line_decrements_stock_and_records_sale_movement(self):
         self.add_product(quantity=5)
         self.db.execute(
