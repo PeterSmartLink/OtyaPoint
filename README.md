@@ -8,7 +8,7 @@ The repository contains a responsive Next.js dashboard, an existing PostgreSQL/S
 
 The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. OmniPoint business records are company-scoped in the D1 schema and API; stock-sale triggers reject cross-company product use. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
 
-**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Staff token issuance, Otya Auth integration, secure staff provisioning, end-to-end POS tests, backup/restore, and operational approval remain release gates.
+**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Secure D1 staff provisioning, migration from the temporary legacy sign-in bridge to shared Otya Auth, end-to-end POS tests, backup/restore, and operational approval remain release gates.
 
 ## Architecture direction
 
