@@ -8,6 +8,9 @@ ALTER TABLE omni_agency_transactions ADD COLUMN company_id TEXT NOT NULL DEFAULT
 ALTER TABLE omni_ledger_entries ADD COLUMN company_id TEXT NOT NULL DEFAULT 'omnipoint-default';
 ALTER TABLE omni_reconciliation_sessions ADD COLUMN company_id TEXT NOT NULL DEFAULT 'omnipoint-default';
 ALTER TABLE omni_audit_events ADD COLUMN company_id TEXT NOT NULL DEFAULT 'omnipoint-default';
+ALTER TABLE omni_staff_memberships ADD COLUMN display_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE omni_staff_memberships ADD COLUMN email TEXT;
+ALTER TABLE omni_staff_memberships ADD COLUMN agent_id TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_omni_products_company_active ON omni_products(company_id, is_active, name);
 CREATE INDEX IF NOT EXISTS idx_omni_sales_company_created ON omni_retail_sales(company_id, created_at DESC);
