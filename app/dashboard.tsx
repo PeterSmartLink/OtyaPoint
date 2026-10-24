@@ -32,8 +32,8 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
   const [mobileNav, setMobileNav] = useState(false);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const [products, setProducts] = useState(initialProducts);
-  const [inventorySource, setInventorySource] = useState<"demo" | "cloudflare">("demo");
+  const [products, setProducts] = useState<typeof initialProducts>([]);
+  const [inventorySource, setInventorySource] = useState<"unavailable" | "cloudflare">("unavailable");
 
   useEffect(() => {
     if (section !== "Inventory") return;
@@ -52,9 +52,9 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setProducts(initialProducts);
-        setInventorySource("demo");
-        setNotice(error instanceof Error ? error.message : "Cloudflare inventory is not connected. Showing demo data.");
+        setProducts([]);
+        setInventorySource("unavailable");
+        setNotice(error instanceof Error ? error.message : "Cloudflare inventory is unavailable. No sample data was loaded.");
       });
     return () => { cancelled = true; };
   }, [section]);
@@ -136,7 +136,7 @@ function Metric({icon,label,value,detail,tone}:{icon:React.ReactNode;label:strin
   return <div className="metric-card"><div className="metric-top"><div className={`metric-icon ${tone}`}>{icon}</div><span className="metric-period">TODAY</span></div><div className="metric-label">{label}</div><div className="metric-value">{value}</div><div className="metric-detail">{detail}</div></div>;
 }
 
-function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"demo"|"cloudflare";onNotice:(s:string)=>void}) {
+function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"unavailable"|"cloudflare";onNotice:(s:string)=>void}) {
   type PosProduct = { id: string; name: string; sku: string; category: string | null; quantityOnHand: number; sellingPrice: number; isActive: boolean };
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
   const [posLoading, setPosLoading] = useState(false);
@@ -207,7 +207,7 @@ function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,a
   const descriptions:Record<Section,string> = {"Retail POS":"Build a retail cart and prepare a sale.","Inventory":"Track product records, variants, and stock alerts.","Fintech Agency":"Record agency service activity separately from retail.","Reconciliation":"Review retail cash and agency balances independently.","Reports":"Prepare clear, auditable business reports.","Team & Access":"Manage staff roles and privileged permissions.","Settings":"Configure the OmniPoint workspace.","Overview":""};
   return <div className="subpage"><div className="welcome-row"><div><div className="eyebrow">OMNIPOINT WORKSPACE</div><h1>{titles[section]}</h1><p className="page-description">{descriptions[section]}</p></div><span className="demo-tag">DEMO MODE</span></div>
     <div className="demo-banner"><div className="demo-banner-icon"><ShieldCheck size={18}/></div><div><strong>Prototype workflow — no financial operation is executed</strong><p>Actions here are illustrative only. Connect a secure API and verify provider responses before production use.</p></div></div>
-    {section === "Inventory" && <div className="panel table-panel"><div className="panel-header"><div><h3>Product catalogue</h3><p>{inventorySource === "cloudflare" ? "Live read from the isolated Cloudflare migration database" : "Sample data only — Cloudflare connection not active"}</p></div><button className="secondary-button" onClick={() => onNotice("Product creation requires the inventory API and database.")}><Plus size={16}/> Add product</button></div><div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, SKU, category…"/></div><div className="table-wrap"><table><thead><tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>STATUS</th></tr></thead><tbody>{products.map(p=><tr key={p.sku}><td><strong>{p.name}</strong></td><td className="mono">{p.sku}</td><td>{p.category}</td><td>{p.stock}</td><td><span className={p.stock<=7?"status-low":"status-ok"}>{p.status}</span></td></tr>)}</tbody></table></div></div>}
+    {section === "Inventory" && <div className="panel table-panel"><div className="panel-header"><div><h3>Product catalogue</h3><p>{inventorySource === "cloudflare" ? "Live read from Cloudflare D1" : "Cloudflare unavailable — no sample data shown"}</p></div><button className="secondary-button" onClick={() => onNotice("Product creation requires the inventory API and database.")}><Plus size={16}/> Add product</button></div><div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, SKU, category…"/></div><div className="table-wrap"><table><thead><tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>STATUS</th></tr></thead><tbody>{products.map(p=><tr key={p.sku}><td><strong>{p.name}</strong></td><td className="mono">{p.sku}</td><td>{p.category}</td><td>{p.stock}</td><td><span className={p.stock<=7?"status-low":"status-ok"}>{p.status}</span></td></tr>)}</tbody></table></div></div>}
     {section === "Retail POS" && <div className="panel workflow-panel">
       <div className="panel-header"><div><h3>Retail point of sale</h3><p>Cash-only sales · inventory and ledger posting through Cloudflare D1</p></div><ShoppingBag size={20} className="panel-title-icon"/></div>
       {posError && <div className="inline-warning" role="alert"><ShieldCheck size={17}/><span>{posError}</span></div>}
