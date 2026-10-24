@@ -26,10 +26,10 @@ type Summary = {
   agency: { transactions: number; providerConfirmedAmount: number; ledgerBalanced: boolean };
 };
 
-type DashboardProps = { role: string; displayName: string; agentId: string | null };
+type DashboardProps = { role: string; displayName: string; agentId: string | null; initialSection?: Section };
 
-export default function Home({ role, displayName, agentId }: DashboardProps) {
-  const [section, setSection] = useState<Section>("Overview");
+export default function Home({ role, displayName, agentId, initialSection = "Overview" }: DashboardProps) {
+  const [section, setSection] = useState<Section>(initialSection);
   const [dark, setDark] = useState(true);
   const [mobileNav, setMobileNav] = useState(false);
   const [query, setQuery] = useState("");
@@ -114,7 +114,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         </nav>
         <div className="sidebar-bottom">
           <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Protected operations</strong><span>Staff access and provider status are enforced server-side.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
-          <button className="nav-item support-link" onClick={() => setNotice("Support centre is a prototype placeholder. Connect a support channel before launch.")}><LifeBuoy size={18}/><span>Help & support</span></button>
+          <button className="nav-item support-link" onClick={() => setNotice("Contact the OmniPoint administrator for operational support.")}><LifeBuoy size={18}/><span>Help & support</span></button>
           <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
         </div>
       </aside>
@@ -124,13 +124,13 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
       <section className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><button className="mobile-menu icon-button" onClick={() => setMobileNav(true)} aria-label="Open menu"><Menu size={20}/></button><span>Workspace</span><span className="crumb-slash">/</span><strong>{section}</strong></div>
-          <div className="top-actions"><div className="environment-pill"><span/> OPERATIONS WORKSPACE</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No live alerts are connected in this prototype.")}><Bell size={18}/><i/></button><div className="top-avatar">{displayName.trim().charAt(0).toUpperCase()}</div></div>
+          <div className="top-actions"><div className="environment-pill"><span/> OPERATIONS WORKSPACE</div><button className="icon-button theme-toggle" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18}/> : <Moon size={18}/>}</button><button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotice("No new operational alerts are recorded.")}><Bell size={18}/><i/></button><div className="top-avatar">{displayName.trim().charAt(0).toUpperCase()}</div></div>
         </header>
 
         <div className="page-content">
           {notice && <div className="notice-banner"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={16}/></button></div>}
           {section === "Overview" ? <>
-            <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot"/> {new Date().toLocaleDateString("en-UG", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase()}</div><h1>Good day, {displayName.split(" ")[0]} <span className="wave">✳</span></h1><p className="page-description">Here’s what’s happening across your business today.</p></div><button className="secondary-button" onClick={() => setNotice("Report export will be enabled when the reporting API is connected.")}><Download size={16}/> Export report</button></div>
+            <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot"/> {new Date().toLocaleDateString("en-UG", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase()}</div><h1>Good day, {displayName.split(" ")[0]} <span className="wave">✳</span></h1><p className="page-description">Here’s what’s happening across your business today.</p></div><button className="secondary-button" onClick={() => selectSection("Reports")}><Download size={16}/> Export report</button></div>
             
             <div className="section-heading"><div><h2>Business overview</h2><p>Retail and fintech are tracked independently.</p></div><button className="period-select" onClick={() => setNotice("Date filters will be connected to real reporting data.")}>Today <ChevronDown size={15}/></button></div>
             <div className="metric-grid">
@@ -144,7 +144,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
               <div className="panel split-panel"><div className="panel-header"><div><h3>Ledger separation</h3><p>Two distinct financial records</p></div><ShieldCheck size={19} className="panel-title-icon"/></div><div className="ledger-tile retail-tile"><div className="ledger-tile-icon"><ShoppingBag size={17}/></div><div className="ledger-tile-copy"><strong>Retail ledger</strong><span>Sales · COGS · Tax metadata</span></div><span className="ledger-status">ISOLATED</span></div><div className="ledger-tile fintech-tile"><div className="ledger-tile-icon"><Smartphone size={17}/></div><div className="ledger-tile-copy"><strong>Fintech ledger</strong><span>Float · Cash-in/out · Commission</span></div><span className="ledger-status">ISOLATED</span></div><div className="audit-note"><ShieldCheck size={16}/><span>Privileged actions will require authorization and an audit record.</span></div></div>
             </div>
             <div className="bottom-grid">
-              <div className="panel inventory-panel"><div className="panel-header"><div><h3>Inventory watch</h3><p>Products at or below reorder level</p></div><Link href="/inventory" className="text-link">View inventory <ArrowUpRight size={14}/></Link></div><div className="product-list">{products.filter(p => p.stock <= 7).map(p => <div className="product-row" key={p.sku}><div className="product-icon"><Package size={17}/></div><div className="product-info"><strong>{p.name}</strong><span>{p.sku}</span></div><span className="stock-count">{p.stock} left</span><span className="status-low">Low stock</span></div>)}</div>{products.length === 0 && <div className="sample-caption">No low-stock product records to display.</div>}</div>
+              <div className="panel inventory-panel"><div className="panel-header"><div><h3>Inventory watch</h3><p>Products at or below reorder level</p></div><button className="text-link" onClick={() => selectSection("Inventory")}>View inventory <ArrowUpRight size={14}/></button></div><div className="product-list">{products.filter(p => p.stock <= p.reorderLevel).map(p => <div className="product-row" key={p.sku}><div className="product-icon"><Package size={17}/></div><div className="product-info"><strong>{p.name}</strong><span>{p.sku}</span></div><span className="stock-count">{p.stock} left</span><span className="status-low">Low stock</span></div>)}</div>{products.length === 0 && <div className="sample-caption">{inventorySource === "cloudflare" ? "No products recorded yet." : "Inventory service unavailable."}</div>}</div>
               <div className="panel quick-panel"><div className="panel-header"><div><h3>Quick actions</h3><p>Jump into a workflow</p></div></div><button className="quick-action" onClick={() => selectSection("Retail POS")}><div className="quick-icon violet-bg"><ShoppingBag size={17}/></div><span><strong>Open retail POS</strong><small>Start a retail sale workflow</small></span><ArrowUpRight size={16}/></button><button className="quick-action" onClick={() => selectSection("Fintech Agency")}><div className="quick-icon blue-bg"><Smartphone size={17}/></div><span><strong>Agency transaction</strong><small>Record a cash-in or cash-out</small></span><ArrowUpRight size={16}/></button><button className="quick-action" onClick={() => selectSection("Reconciliation")}><div className="quick-icon green-bg"><CircleDollarSign size={17}/></div><span><strong>Reconcile balances</strong><small>Review differences by ledger</small></span><ArrowUpRight size={16}/></button></div>
             </div>
           </> : <SectionView section={section} products={filteredProducts} query={query} setQuery={setQuery} serviceTab={serviceTab} setServiceTab={setServiceTab} amount={amount} setAmount={setAmount} inventorySource={inventorySource} onNotice={setNotice} />}
