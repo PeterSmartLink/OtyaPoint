@@ -136,6 +136,7 @@ function Metric({icon,label,value,detail,tone}:{icon:React.ReactNode;label:strin
   return <div className="metric-card"><div className="metric-top"><div className={`metric-icon ${tone}`}>{icon}</div><span className="metric-period">TODAY</span></div><div className="metric-label">{label}</div><div className="metric-value">{value}</div><div className="metric-detail">{detail}</div></div>;
 }
 
+function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"demo"|"cloudflare";onNotice:(s:string)=>void}) {
   type PosProduct = { id: string; name: string; sku: string; category: string | null; quantityOnHand: number; sellingPrice: number; isActive: boolean };
   const [posProducts, setPosProducts] = useState<PosProduct[]>([]);
   const [posLoading, setPosLoading] = useState(false);
@@ -201,7 +202,7 @@ function Metric({icon,label,value,detail,tone}:{icon:React.ReactNode;label:strin
       setPosBusy(false);
     }
   }
-function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"demo"|"cloudflare";onNotice:(s:string)=>void}) {
+
   const [search, setSearch] = useState("");
   const [sku, setSku] = useState("");
   const titles:Record<Section,string> = {"Retail POS":"Retail point of sale","Inventory":"Inventory management","Fintech Agency":"Fintech agency desk","Reconciliation":"Daily reconciliation","Reports":"Reports & exports","Team & Access":"Team & access control","Settings":"Workspace settings","Overview":"Overview"};
