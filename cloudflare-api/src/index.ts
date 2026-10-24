@@ -162,16 +162,22 @@ export default {
         const cost = int(body.costPrice);
         const price = int(body.sellingPrice);
         const reorder = int(body.reorderLevel);
-        if (!sku || !/^[A-Z0-9._-]{2,64}$/.test(sku) || !name || cost === null || price === null || reorder === null) return json({ error: "invalid_product" }, 400);
+        const openingStock = int(body.openingStock ?? 0);
+        if (!sku || !/^[A-Z0-9._-]{2,64}$/.test(sku) || !name || cost === null || price === null || reorder === null || openingStock === null || openingStock > 100000000) return json({ error: "invalid_product" }, 400);
         const id = uuid();
-        const product = { id, sku, name, category, costPrice: cost, sellingPrice: price, quantityOnHand: 0, reorderLevel: reorder };
+        const product = { id, sku, name, category, costPrice: cost, sellingPrice: price, quantityOnHand: openingStock, reorderLevel: reorder };
         try {
-          await env.DB.batch([
+          const statements: D1Statement[] = [
             env.DB.prepare("INSERT INTO omni_products (id,sku,name,description,category,cost_price,selling_price,quantity_on_hand,reorder_level,company_id) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8,?9)")
-              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder, staff.company_id),
-            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created',?4,?5,?6)")
-              .bind(uuid(), staff.id, id, JSON.stringify(product), rid, staff.company_id)
-          ]);
+              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder, staff.company_id)
+          ];
+          if (openingStock > 0) {
+            statements.push(env.DB.prepare("INSERT INTO omni_stock_movements (id,product_id,actor_id,movement_type,quantity_delta,quantity_after,unit_cost,reference_type,reference_id,reason,company_id) VALUES (?1,?2,?3,'OPENING',?4,?4,?5,'PRODUCT_OPENING',?2,'Opening stock recorded when product was created',?6)")
+              .bind(uuid(), id, staff.id, openingStock, cost, staff.company_id));
+          }
+          statements.push(env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id,company_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created with opening stock',NULL,?4,?5,?6)")
+            .bind(uuid(), staff.id, id, JSON.stringify(product), rid, staff.company_id));
+          await env.DB.batch(statements);
         } catch (error) {
           if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "sku_conflict" }, 409);
           throw error;
