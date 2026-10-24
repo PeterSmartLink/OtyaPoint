@@ -17,7 +17,7 @@
 - A separate Worker configuration exists for test and production bindings. The production config has no custom domain and has not been deployed by this branch.
 - The API now has protected product reads, product creation, stock adjustment, cash POS posting, summary and ledger reads in code. The Worker now verifies five-minute HMAC-signed tokens issued only by the server-side web bridge after its existing staff session is checked, then loads company scope and role from D1. The inventory page uses the Cloudflare API and does not fall back to PostgreSQL. This is a transitional sign-in adapter, not yet the shared Otya Auth flow; staff provisioning and the shared-identity migration remain incomplete.
 - Agency provider execution remains disabled and returns a non-success response without making provider calls or recording a false success.
-- The dashboard is not yet wired to the new API. Existing PostgreSQL/Supabase runtime code must not be removed until the new UI/API contract and migration/cutover are proven.
+- The inventory page and cash-only POS code now call the dedicated Cloudflare API through server-side bridge routes. The bridge is not configured/deployed, so these workflows fail closed until the Worker URL, server-only HMAC secret and active D1 staff memberships are set up. Overview, reporting, reconciliation and agency UI sections still contain demo/planned workflows. Existing PostgreSQL/Supabase staff sign-in and other legacy runtime code must not be removed until the shared identity migration and cutover are proven.
 
 ## Quality gates
 
