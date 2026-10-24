@@ -51,6 +51,8 @@ jobs:
           done
       - name: Test isolated SQLite schema compatibility
         run: python3 migration/d1/test_schema.py
+      - name: Test OmniPoint D1 core schema and invariants
+        run: python3 cloudflare-api/tests/test_core_schema.py
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -59,6 +61,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Validate Prisma schema
         run: npm run db:validate
+      - name: Type-check Cloudflare Worker
+        run: npm run check:worker
       - name: Lint
         run: npm run lint
       - name: Build

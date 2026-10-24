@@ -1,0 +1,43 @@
+name = "omnipoint-api"
+main = "cloudflare-api/src/index.ts"
+compatibility_date = "2026-10-23"
+workers_dev = true
+keep_vars = true
+
+[observability]
+enabled = true
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[[d1_databases]]
+binding = "DB"
+database_name = "omnipoint-prod"
+database_id = "65868e64-ff39-4ed3-91de-59c237cd9cb0"
+migrations_dir = "cloudflare-api/migrations"
+
+[[r2_buckets]]
+binding = "PRIVATE_FILES"
+bucket_name = "omnipoint-private"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "omnipoint-backups"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "cc30449e4a93428c989a564cebf80417"
+
+[[queues.producers]]
+binding = "JOBS"
+queue = "omnipoint-jobs"
+
+# Intentionally no custom domain and no queue consumer until the API,
+# authorization contract, idempotency and retry/DLQ behavior pass tests.
+
+
+# Validate Otya access tokens through the existing Auth Worker; do not duplicate
+# passwords, signing keys or refresh-token storage in OmniPoint.
+[[services]]
+binding = "AUTH"
+service = "otya-auth"
