@@ -137,9 +137,27 @@ export default {
 
       if (request.method === "GET" && url.pathname === "/api/products") {
         const result = await env.DB.prepare(
-          "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 AND company_id = ?1 ORDER BY name LIMIT 500"
-        ).bind(staff.company_id).all();
-        return json({ data: result.results, count: result.results.length, requestId: rid });
+          "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, is_active, created_at, updated_at FROM omni_products WHERE is_active = 1 AND company_id = ?1 ORDER BY name LIMIT 500"
+        ).bind(staff.company_id).all<{
+          id: string; sku: string; name: string; description: string | null; category: string;
+          cost_price: number; selling_price: number; quantity_on_hand: number; reorder_level: number;
+          is_active: number; created_at: string; updated_at: string;
+        }>();
+        const data = result.results.map(product => ({
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          description: product.description,
+          category: product.category,
+          costPrice: product.cost_price,
+          sellingPrice: product.selling_price,
+          quantityOnHand: product.quantity_on_hand,
+          reorderLevel: product.reorder_level,
+          isActive: product.is_active === 1,
+          createdAt: product.created_at,
+          updatedAt: product.updated_at
+        }));
+        return json({ data, count: data.length, requestId: rid });
       }
 
       if (request.method === "GET" && url.pathname === "/api/summary") {
