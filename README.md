@@ -1,14 +1,16 @@
 # OmniPoint
 
-OmniPoint is a standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
+OmniPoint is the operating platform for the retail shop and fintech-agency services of **Otya Hold Ltd** in Uganda. Otya Hold Ltd is the legal business owner; OmniPoint is the operating business/product name. Do not describe OmniPoint UG Limited as the owner unless the company structure is formally changed and verified.
 
 ## Current implementation status
 
-The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API work is now being developed as an isolated service with its own schema and configuration. It is not yet connected to the production dashboard and is not ready to execute mobile-money or bill-payment operations.
+The repository contains a responsive Next.js dashboard, an existing PostgreSQL/Supabase-based app foundation, and a separate Cloudflare Worker/D1 service path. The Cloudflare API is not yet established as the only production writer and is not ready to execute mobile-money or bill-payment operations.
 
-The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues have been provisioned. OmniPoint business records are company-scoped in the D1 schema and API; stock-sale triggers reject cross-company product use. The new D1 core schema has been applied to the isolated migration-test database only. The production D1 database has not been migrated by this branch. No production Worker, custom domain, or provider integration is activated by this branch.
+**Important: the Cloudflare resource inventory and deployed database schemas must be reconciled.** A read-only Cloudflare API audit on 2026-10-24 found that `omnipoint-prod` already contains the nine `omni_*` core tables, indexes and stock triggers, contrary to the previous inventory note that said it had zero tables. It also found that the production schema is behind the migration-test schema: several operational tables in production do not have the `company_id` column present in the test schema, and production staff memberships lack several profile/review fields. Do not deploy the current Worker or expose production routes until the migration history, expected schema and tenant-scope assumptions are reconciled and tested.
 
-**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Staff token issuance, Otya Auth integration, secure staff provisioning, end-to-end POS tests, backup/restore, and operational approval remain release gates.
+The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queues exist. The dedicated OmniPoint Worker has not been observed in the account's Worker inventory. No custom domain or verified provider integration is active for OmniPoint. Do not infer production readiness from the existence of resources, tables, a successful build, or a health endpoint.
+
+**Do not treat a successful build or health endpoint as proof that OmniPoint is production-ready.** Secure staff provisioning, the Otya Auth contract, schema parity, POS transaction tests, backup/restore, reconciliation and operational approval remain release gates.
 
 ## Architecture direction
 
@@ -45,24 +47,26 @@ python3 cloudflare-api/tests/test_core_schema.py
 ## Cloudflare API work
 
 - `wrangler.toml` and the existing `cloudflare-api` scaffold remain the isolated migration-test setup for earlier experiments.
-- `wrangler.omnipoint.test.toml` describes the dedicated test configuration for the new API/schema work.
-- `wrangler.omnipoint.toml` describes the proposed dedicated production Worker bindings. Do not deploy this configuration until the release gates are satisfied.
+- `wrangler.omnipoint.test.toml` describes the dedicated test configuration for API/schema work.
+- `wrangler.omnipoint.toml` describes proposed dedicated production Worker bindings. Do not deploy this configuration until all release gates pass.
 - The production config has no custom domain. Do not bind OmniPoint records into the shared `otya-core` Worker by default.
-- Business routes verify the caller's Otya access token through the existing Auth Worker service binding, then require an active local staff record. The browser's role claims are never trusted. No public bootstrap-admin route exists.
+- Business routes verify the caller's Otya access token through the existing Auth Worker service binding, then require an active local staff record. Browser role claims must never be trusted. No public bootstrap-admin route should exist.
 - Cash POS posting is designed to use one D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Validate concurrency and failure rollback in CI and an isolated environment before production use.
 - Agency transactions deliberately return a disabled response until verified provider adapters and status reconciliation are ready.
 
 ## Data migration and recovery
 
-The older PostgreSQL/Supabase implementation must be treated as a legacy source/recovery copy during this transition, not as a second live writer. Do not dual-write financial records to PostgreSQL and D1. Do not delete the existing Supabase project or its records as part of this feature branch.
+The older PostgreSQL/Supabase implementation must be treated as a legacy source/recovery copy during this transition, not as a second live writer. Do not dual-write financial records to PostgreSQL and D1. Do not delete existing Supabase projects or records as part of this feature branch.
 
-Before cutover, export and verify the approved data set, compare row counts and business invariants, test an isolated restore, and choose one writable primary. Follow the [Cloudflare resource inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md) and [build gates](docs/OMNIPOINT_BUILD_GATES.md).
+Before cutover, export and verify the approved data set, compare row counts and business invariants, test an isolated restore, and choose one writable primary. Reconcile the production D1 schema against reviewed migrations first. Follow the [Cloudflare resource inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md) and [build gates](docs/OMNIPOINT_BUILD_GATES.md).
 
 ## Business and security boundaries
 
+- Legal owner: **Otya Hold Ltd**. Operating product/business name: **OmniPoint**.
 - Public self-registration is not allowed for staff.
 - Staff access must be provisioned through a secure owner/management process.
 - Roles and branch permissions are read from server-side OmniPoint records, never trusted from browser payloads.
+- Every business query and write must be scoped to the authenticated staff member's authorized company and branch.
 - Do not store raw national ID numbers or identity-document images unless an approved, compliant requirement is established.
 - Never commit credentials, database URLs, signing keys, provider secrets, or production data.
 - No EFRIS, mobile-money, airtime or bill-payment integration should be represented as live until provider approval and end-to-end verification are complete.
