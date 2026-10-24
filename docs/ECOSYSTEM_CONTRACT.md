@@ -32,7 +32,7 @@ This contract defines how OmniPoint relates to Otya products without merging the
 ## Communication pattern
 
 1. The user authenticates through the approved Otya Auth flow where shared identity is appropriate.
-2. The OmniPoint API sends the access token to the existing Otya Auth Worker through a service binding and accepts only its verified identity response; Auth remains responsible for signature, expiry and token lifecycle validation.
+2. The current compatibility path verifies the existing web staff session server-side, issues a short-lived HMAC-signed OmniPoint token, and has the dedicated Worker verify that signature before mapping the subject to an active D1 staff membership. This adapter is temporary; the target ecosystem path is shared Otya Auth verification followed by local OmniPoint authorization. Do not claim the shared-identity migration is complete.
 3. The API maps the identity subject to an active OmniPoint staff membership and loads role, company, branch and permissions from OmniPoint-owned records.
 4. The API executes business operations against OmniPoint D1 only.
 5. Durable events are emitted after a successful committed transaction; queue consumers are idempotent and send poison messages to the OmniPoint dead-letter queue.
