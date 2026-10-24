@@ -168,5 +168,46 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             )
 
 
+    def test_worker_required_columns_exist_in_clean_migration_chain(self):
+        required = {
+            "omni_products": {"id", "sku", "name", "company_id"},
+            "omni_retail_sales": {"id", "receipt_number", "idempotency_key", "company_id"},
+            "omni_retail_sale_lines": {"id", "sale_id", "product_id"},
+            "omni_stock_movements": {"id", "product_id", "actor_id", "company_id"},
+            "omni_agency_transactions": {"id", "reference", "idempotency_key", "company_id"},
+            "omni_ledger_entries": {"id", "ledger_type", "debit", "credit", "company_id"},
+            "omni_reconciliation_sessions": {"id", "ledger_type", "business_date", "company_id"},
+            "omni_audit_events": {"id", "actor_id", "action", "company_id"},
+            "omni_staff_memberships": {
+                "id", "identity_subject", "company_id", "branch_id", "role", "status",
+                "display_name", "email", "agent_id"
+            },
+        }
+        for table, expected_columns in required.items():
+            with self.subTest(table=table):
+                actual = {
+                    row[1] for row in self.db.execute(f"PRAGMA table_info({table})")
+                }
+                self.assertTrue(expected_columns.issubset(actual),
+                                f"{table} missing: {sorted(expected_columns - actual)}")
+
+    def test_company_scope_indexes_exist_for_operational_tables(self):
+        indexes = {
+            row[0] for row in self.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+        }
+        expected = {
+            "idx_omni_products_company_active",
+            "idx_omni_sales_company_created",
+            "idx_omni_stock_company_product",
+            "idx_omni_agency_company_status",
+            "idx_omni_ledger_company_type_date",
+            "idx_omni_reconciliation_company_date",
+            "idx_omni_audit_company_created",
+        }
+        self.assertTrue(expected.issubset(indexes), f"Missing indexes: {sorted(expected - indexes)}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
