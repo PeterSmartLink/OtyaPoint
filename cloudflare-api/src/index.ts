@@ -120,6 +120,89 @@ export default {
         });
       }
 
+      if (request.method === "GET" && url.pathname === "/api/cash-sessions/current") {
+        const current = await env.DB.prepare(
+          "SELECT id, company_id, branch_id, opened_by, opening_cash, status, opened_at FROM omni_cash_sessions WHERE company_id=?1 AND branch_id IS ?2 AND opened_by=?3 AND status='OPEN' ORDER BY opened_at DESC LIMIT 1"
+        ).bind(staff.company_id, staff.branch_id, staff.id).first();
+        return json({ data: current, requestId: rid });
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/cash-sessions/open") {
+        const body = await parseBody(request); if (isBodyResponse(body)) return body;
+        const openingCash = int(body.openingCash);
+        const openingNote = safeText(body.note, 300);
+        if (openingCash === null || openingCash > 100000000000) return json({ error: "invalid_opening_cash" }, 400);
+        const id = uuid();
+        try {
+          await env.DB.batch([
+            env.DB.prepare("INSERT INTO omni_cash_sessions (id,company_id,branch_id,opened_by,opening_cash,opening_note,status) VALUES (?1,?2,?3,?4,?5,?6,'OPEN')")
+              .bind(id, staff.company_id, staff.branch_id, staff.id, openingCash, openingNote || null),
+            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'OPEN_CASH_SESSION','CASH_SESSION',?3,?4,?5,?6,?7)")
+              .bind(uuid(), staff.id, id, openingNote || "Cashier shift opened", JSON.stringify({ openingCash, branchId: staff.branch_id }), rid, staff.company_id)
+          ]);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "cash_session_already_open" }, 409);
+          throw error;
+        }
+        return json({ data: { id, companyId: staff.company_id, branchId: staff.branch_id, openingCash, status: "OPEN" }, requestId: rid }, 201);
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/cash-movements") {
+        if (!canManage(staff)) return json({ error: "forbidden" }, 403);
+        const body = await parseBody(request); if (isBodyResponse(body)) return body;
+        const type = safeText(body.type, 20).toUpperCase();
+        const amount = int(body.amount, 1);
+        const reason = safeText(body.reason, 300);
+        const idempotencyKey = safeText(request.headers.get("idempotency-key"), 128);
+        if ((type !== "PAID_IN" && type !== "PAID_OUT") || amount === null || amount > 100000000000 ||
+            !reason || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
+          return json({ error: "invalid_cash_movement" }, 400);
+        }
+        const session = await env.DB.prepare(
+          "SELECT id FROM omni_cash_sessions WHERE company_id=?1 AND branch_id IS ?2 AND status='OPEN' ORDER BY opened_at DESC LIMIT 1"
+        ).bind(staff.company_id, staff.branch_id).first<{ id: string }>();
+        if (!session) return json({ error: "open_cash_session_required" }, 409);
+        try {
+          await env.DB.batch([
+            env.DB.prepare("INSERT INTO omni_cash_movements (id,session_id,company_id,actor_id,movement_type,amount,reason,source_type,source_id,idempotency_key) VALUES (?1,?2,?3,?4,?5,?6,?7,'MANUAL_CASH_MOVEMENT',?8,?9)")
+              .bind(uuid(), session.id, staff.company_id, staff.id, type, amount, reason, idempotencyKey, idempotencyKey),
+            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,?3,'CASH_SESSION',?4,?5,?6,?7,?8)")
+              .bind(uuid(), staff.id, type, session.id, reason, JSON.stringify({ amount, idempotencyKey }), rid, staff.company_id)
+          ]);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "duplicate_cash_movement" }, 409);
+          if (error instanceof Error && error.message.includes("CASH_SESSION_NOT_OPEN")) return json({ error: "cash_session_closed" }, 409);
+          throw error;
+        }
+        return json({ data: { sessionId: session.id, type, amount, idempotencyKey }, requestId: rid }, 201);
+      }
+
+      const closeMatch = url.pathname.match(/^\\/api\\/cash-sessions\\/([A-Za-z0-9_-]+)\\/close$/);
+      if (request.method === "POST" && closeMatch) {
+        const body = await parseBody(request); if (isBodyResponse(body)) return body;
+        const countedCash = int(body.countedCash);
+        const closingNote = safeText(body.note, 500);
+        if (countedCash === null || countedCash > 100000000000) return json({ error: "invalid_counted_cash" }, 400);
+        const sessionId = closeMatch[1];
+        const session = await env.DB.prepare(
+          "SELECT id,opened_by,opening_cash,status FROM omni_cash_sessions WHERE id=?1 AND company_id=?2 AND branch_id IS ?3"
+        ).bind(sessionId, staff.company_id, staff.branch_id).first<{ id: string; opened_by: string; opening_cash: number; status: string }>();
+        if (!session) return json({ error: "cash_session_not_found" }, 404);
+        if (session.opened_by !== staff.id && !canManage(staff)) return json({ error: "forbidden" }, 403);
+        if (session.status !== "OPEN") return json({ error: "cash_session_not_open" }, 409);
+        const update = await env.DB.prepare(
+          "UPDATE omni_cash_sessions SET expected_cash=opening_cash + COALESCE((SELECT SUM(CASE WHEN movement_type IN ('SALE','PAID_IN') THEN amount ELSE -amount END) FROM omni_cash_movements WHERE session_id=?1 AND company_id=?2),0), counted_cash=?3, difference=?3 - (opening_cash + COALESCE((SELECT SUM(CASE WHEN movement_type IN ('SALE','PAID_IN') THEN amount ELSE -amount END) FROM omni_cash_movements WHERE session_id=?1 AND company_id=?2),0)), status=CASE WHEN ?3 = (opening_cash + COALESCE((SELECT SUM(CASE WHEN movement_type IN ('SALE','PAID_IN') THEN amount ELSE -amount END) FROM omni_cash_movements WHERE session_id=?1 AND company_id=?2),0)) THEN 'CLOSED' ELSE 'REVIEW_REQUIRED' END, closed_by=?4, closing_note=?5, closed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?1 AND company_id=?2 AND status='OPEN'"
+        ).bind(sessionId, staff.company_id, countedCash, staff.id, closingNote || null).run();
+        if ((update.meta?.changes || 0) !== 1) return json({ error: "cash_session_close_conflict" }, 409);
+        const closed = await env.DB.prepare(
+          "SELECT id,opening_cash,expected_cash,counted_cash,difference,status,opened_at,closed_at FROM omni_cash_sessions WHERE id=?1 AND company_id=?2"
+        ).bind(sessionId, staff.company_id).first();
+        await env.DB.prepare(
+          "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'CLOSE_CASH_SESSION','CASH_SESSION',?3,?4,?5,?6,?7)"
+        ).bind(uuid(), staff.id, sessionId, closingNote || "Cashier shift closed", JSON.stringify(closed), rid, staff.company_id).run();
+        return json({ data: closed, requestId: rid });
+      }
+
       if (request.method === "GET" && url.pathname === "/api/products") {
         const result = await env.DB.prepare(
           "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 AND company_id = ?1 ORDER BY name LIMIT 500"
@@ -217,6 +300,10 @@ export default {
           if (!productId || quantity === null || quantity > 10000 || seen.has(productId)) return json({ error: "invalid_sale_items" }, 400);
           seen.add(productId); normalized.push({ productId, quantity });
         }
+        const currentSession = await env.DB.prepare(
+          "SELECT id FROM omni_cash_sessions WHERE company_id=?1 AND branch_id IS ?2 AND opened_by=?3 AND status='OPEN' ORDER BY opened_at DESC LIMIT 1"
+        ).bind(staff.company_id, staff.branch_id, staff.id).first<{ id: string }>();
+        if (!currentSession) return json({ error: "open_cash_session_required" }, 409);
         const existing = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
         if (existing) return json({ data: existing, replayed: true, requestId: rid });
         const placeholders = normalized.map((_, i) => "?" + (i + 2)).join(",");
@@ -240,8 +327,8 @@ export default {
         }
         if (!Number.isSafeInteger(subtotal) || !Number.isSafeInteger(costOfGoods) || subtotal <= 0) return json({ error: "invalid_sale_total" }, 400);
         const statements: D1Statement[] = [
-          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id,company_id) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6,?7)")
-            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id, staff.company_id)
+          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id,company_id,cash_session_id,branch_id) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6,?7,?8,?9)")
+            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id, staff.company_id, currentSession.id, staff.branch_id)
         ];
         for (const line of saleLines) {
           statements.push(env.DB.prepare(
