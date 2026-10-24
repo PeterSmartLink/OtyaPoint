@@ -159,19 +159,137 @@ function Metric({icon,label,value,detail,tone}:{icon:React.ReactNode;label:strin
   return <div className="metric-card"><div className="metric-top"><div className={`metric-icon ${tone}`}>{icon}</div><span className="metric-period">TODAY</span></div><div className="metric-label">{label}</div><div className="metric-value">{value}</div><div className="metric-detail">{detail}</div></div>;
 }
 
-function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:typeof initialProducts;query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"unavailable"|"cloudflare";onNotice:(s:string)=>void}) {
+function SectionView({section,products,query,setQuery,serviceTab,setServiceTab,amount,setAmount,inventorySource,onNotice}:{section:Section;products:Product[];query:string;setQuery:(s:string)=>void;serviceTab:"Cash in"|"Cash out";setServiceTab:(s:"Cash in"|"Cash out")=>void;amount:string;setAmount:(s:string)=>void;inventorySource:"unavailable"|"cloudflare";onNotice:(s:string)=>void}) {
   const [search, setSearch] = useState("");
-  const [sku, setSku] = useState("");
+  const [selectedSku, setSelectedSku] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [saving, setSaving] = useState(false);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: "", sku: "", category: "General", costPrice: "0", sellingPrice: "0", openingStock: "0", reorderLevel: "3" });
+  const [adjustProductId, setAdjustProductId] = useState("");
+  const [quantityDelta, setQuantityDelta] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
   const titles:Record<Section,string> = {"Retail POS":"Retail point of sale","Inventory":"Inventory management","Fintech Agency":"Fintech agency desk","Reconciliation":"Daily reconciliation","Reports":"Reports & exports","Team & Access":"Team & access control","Settings":"Workspace settings","Overview":"Overview"};
-  const descriptions:Record<Section,string> = {"Retail POS":"Build a retail cart and prepare a sale.","Inventory":"Track product records, variants, and stock alerts.","Fintech Agency":"Record agency service activity separately from retail.","Reconciliation":"Review retail cash and agency balances independently.","Reports":"Prepare clear, auditable business reports.","Team & Access":"Manage staff roles and privileged permissions.","Settings":"Configure the OmniPoint workspace.","Overview":""};
-  return <div className="subpage"><div className="welcome-row"><div><div className="eyebrow">OMNIPOINT WORKSPACE</div><h1>{titles[section]}</h1><p className="page-description">{descriptions[section]}</p></div></div>
-    <div className="notice-banner"><ShieldCheck size={18}/><span>Only confirmed server responses are recorded. Unsupported provider operations remain unavailable.</span></div>
-    {section === "Inventory" && <div className="panel table-panel"><div className="panel-header"><div><h3>Product catalogue</h3><p>{inventorySource === "cloudflare" ? "Live inventory records from OmniPoint operations" : "Inventory service unavailable. No sample records are displayed."}</p></div><button className="secondary-button" onClick={() => onNotice("Use the product creation form below to save a product to OmniPoint.")}><Plus size={16}/> Add product</button></div><div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, SKU, category…"/></div><div className="table-wrap"><table><thead><tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>STATUS</th></tr></thead><tbody>{products.map(p=><tr key={p.sku}><td><strong>{p.name}</strong></td><td className="mono">{p.sku}</td><td>{p.category}</td><td>{p.stock}</td><td><span className={p.stock<=7?"status-low":"status-ok"}>{p.status}</span></td></tr>)}</tbody></table></div></div>}
-    {section === "Retail POS" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>New retail sale</h3><p>Cash sale · server-confirmed posting</p></div><ShoppingBag size={20} className="panel-title-icon"/></div><label className="field-label">Find a product by name or SKU</label><div className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…"/></div><div className="pos-product-grid">{products.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())||p.sku.toLowerCase().includes(search.toLowerCase())).map(p=><button className="pos-product" key={p.sku} onClick={()=>setSku(p.sku)}><div className="product-icon"><Package size={20}/></div><strong>{p.name}</strong><span>{p.sku}</span><small>{p.stock} units · UGX {p.sellingPrice.toLocaleString("en-UG")}</small></button>)}</div><div className="cart-summary"><div><strong>Selected item</strong><span>{sku ? products.find(p=>p.sku===sku)?.name : "No item selected"}</span></div><button className="primary-button" onClick={()=>onNotice(sku ? "Item selected. Sale submission requires the live sale action." : "Choose a product first.")}>Complete cash sale <ArrowUpRight size={15}/></button></div></div>}
-    {section === "Fintech Agency" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Agency service record</h3><p>Provider operation · verified status required</p></div><Smartphone size={20} className="panel-title-icon"/></div><div className="segmented"><button className={serviceTab==="Cash in"?"selected":""} onClick={()=>setServiceTab("Cash in")}><ArrowDownLeft size={16}/> Cash in</button><button className={serviceTab==="Cash out"?"selected":""} onClick={()=>setServiceTab("Cash out")}><ArrowUpRight size={16}/> Cash out</button></div><label className="field-label">Amount (UGX)</label><input className="form-input" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,""))} placeholder="Enter amount"/><div className="inline-warning"><ShieldCheck size={17}/><span>Never enter a customer PIN or OTP here. Provider execution must use an approved, secure integration.</span></div><button className="primary-button" onClick={()=>onNotice(amount && Number(amount)>0 ? `${serviceTab} draft prepared for UGX ${Number(amount).toLocaleString("en-UG")}. Nothing has been sent or recorded.` : "Enter a valid amount to prepare a demo draft.")}>Submit transaction <ArrowUpRight size={16}/></button></div>}
-    {section === "Reconciliation" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Ledger reconciliation</h3><p>Separate checks for each accounting stream</p></div><Activity size={20} className="panel-title-icon"/></div><div className="recon-row"><div className="ledger-tile-icon"><ShoppingBag size={18}/></div><div className="ledger-tile-copy"><strong>Retail cash reconciliation</strong><span>Expected cash vs counted cash · Retail ledger only</span></div><span className="status-pending">NOT STARTED</span></div><div className="recon-row"><div className="ledger-tile-icon"><Smartphone size={18}/></div><div className="ledger-tile-copy"><strong>Agency float reconciliation</strong><span>Cash, provider balances and recorded float movements</span></div><span className="status-pending">NOT STARTED</span></div><button className="secondary-button" onClick={()=>onNotice("Reconciliation needs persisted transactions, counted balances, and provider statements.")}>Review requirements</button></div>}
-    {section === "Reports" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Available report templates</h3><p>Exports will be enabled after backend and compliance validation.</p></div><Download size={20} className="panel-title-icon"/></div><div className="report-item"><div className="quick-icon violet-bg"><ShoppingBag size={18}/></div><div><strong>Retail sales & stock</strong><span>Sales, COGS, stock movements, invoice metadata</span></div><button className="secondary-button" onClick={()=>onNotice("No report was generated because the reporting export endpoint is not configured.")}>Export <Download size={14}/></button></div><div className="report-item"><div className="quick-icon blue-bg"><Wallet size={18}/></div><div><strong>Fintech agency ledger</strong><span>Cash-in/out, float changes, commissions, volumes</span></div><button className="secondary-button" onClick={()=>onNotice("No report was generated because the reporting export endpoint is not configured.")}>Export <Download size={14}/></button></div><div className="report-item"><div className="quick-icon green-bg"><ShieldCheck size={18}/></div><div><strong>Audit trail</strong><span>Privileged actions, approvals and change history</span></div><button className="secondary-button" onClick={()=>onNotice("Audit export will be available after audit storage is implemented.")}>Export <Download size={14}/></button></div></div>}
-    {section === "Team & Access" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Team access</h3><p>Role-based access is enforced against active staff records</p></div><ShieldCheck size={20} className="panel-title-icon"/></div>{[["Attendant","POS access, permitted service records, own shift"],["Manager","Shift oversight, stock management, approved reversals"],["Managing director","Reports, controls, team and operational oversight"],["Chairman / root admin","Privileged configuration with strong verification and audit"]].map(([role,desc])=><div className="report-item" key={role}><div className="avatar role-avatar">{role[0]}</div><div><strong>{role}</strong><span>{desc}</span></div><span className="status-pending">PLANNED</span></div>)}<div className="inline-warning"><ShieldCheck size={17}/><span>Root access must not bypass audit logging. High-risk actions should require re-authentication and, where possible, a second approver.</span></div></div>}
-    {section === "Settings" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Workspace configuration</h3><p>Core settings planned for OmniPoint</p></div><Settings2 size={20} className="panel-title-icon"/></div>{[["Business identity","OmniPoint UG Limited"],["Base currency","UGX — Ugandan shilling"],["Accounting streams","Retail and fintech agency · separate"],["Tax integration","EFRIS integration requires validation"],["Mobile money","MTN / Airtel provider adapters planned"],["Alerts","Telegram notifications require bot configuration"]].map(([k,v])=><div className="setting-row" key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>}
+  const descriptions:Record<Section,string> = {"Retail POS":"Sell stocked products and record confirmed cash sales.","Inventory":"Manage the real product catalogue, opening stock, and auditable stock adjustments.","Fintech Agency":"Track provider-backed agency services. Transactions are recorded only after provider confirmation.","Reconciliation":"Review financial records and capture counted balances separately for each ledger.","Reports":"Export actual operational records for business review.","Team & Access":"Review role-based access to the OmniPoint workspace.","Settings":"Review workspace identity and integration status.","Overview":""};
+
+  async function createProduct(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const response = await fetch("/api/bridge/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        name: newProduct.name, sku: newProduct.sku, category: newProduct.category,
+        costPrice: Number(newProduct.costPrice), sellingPrice: Number(newProduct.sellingPrice),
+        openingStock: Number(newProduct.openingStock), reorderLevel: Number(newProduct.reorderLevel)
+      }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) { onNotice(payload.message || payload.error || "Product was not saved."); return; }
+      onNotice("Product saved to OmniPoint, including its opening-stock record.");
+      window.location.reload();
+    } catch { onNotice("Inventory service unavailable. Product was not saved."); }
+    finally { setSaving(false); }
+  }
+
+  async function adjustStock(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const response = await fetch("/api/bridge/stock-adjustments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        productId: adjustProductId, quantityDelta: Number(quantityDelta), reason: adjustmentReason
+      }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) { onNotice(payload.message || payload.error || "Stock adjustment was not saved."); return; }
+      onNotice("Stock adjustment recorded with an audit event.");
+      window.location.reload();
+    } catch { onNotice("Inventory service unavailable. No stock adjustment was confirmed."); }
+    finally { setSaving(false); }
+  }
+
+  async function completeSale(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const selected = products.find(p => p.sku === selectedSku);
+    const qty = Number(quantity);
+    if (!selected) { onNotice("Select an available product first."); return; }
+    if (!Number.isSafeInteger(qty) || qty < 1 || qty > selected.stock) { onNotice("Enter a whole quantity within the available stock."); return; }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/bridge/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ paymentMethod: "CASH", items: [{ productId: selected.id, quantity: qty }] })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) { onNotice(payload.message || payload.detail || payload.error || "Sale was not completed. No success was recorded."); return; }
+      onNotice("Cash sale recorded. Receipt: " + (payload.data?.receiptNumber || "issued by OmniPoint"));
+      window.location.reload();
+    } catch { onNotice("Sales service unavailable. No sale was confirmed."); }
+    finally { setSaving(false); }
+  }
+
+  async function submitAgencyRequest() {
+    if (!amount || !Number.isSafeInteger(Number(amount)) || Number(amount) <= 0) { onNotice("Enter a valid amount in UGX."); return; }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/bridge/agency-transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transactionType: serviceTab === "Cash in" ? "CASH_IN" : "CASH_OUT", amount: Number(amount), currency: "UGX" }) });
+      const payload = await response.json().catch(() => ({}));
+      onNotice(payload.detail || payload.message || payload.error || "Provider operation was not confirmed.");
+    } catch { onNotice("Agency provider service unavailable. No transaction was confirmed."); }
+    finally { setSaving(false); }
+  }
+
+  async function exportLedger(type: "RETAIL" | "FINTECH_AGENCY") {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/bridge/ledger?type=" + type, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(payload.data)) { onNotice(payload.message || payload.error || "Ledger export is unavailable."); return; }
+      const rows = payload.data as Array<Record<string, unknown>>;
+      const keys = ["effective_at","ledger_type","account_code","currency","debit","credit","source_type","source_id","description"];
+      const quote = (value: unknown) => '"' + String(value ?? "").replace(/"/g, '""') + '"';
+      const csv = [keys.join(","), ...rows.map(row => keys.map(key => quote(row[key])).join(","))].join("\r\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url; link.download = "omnipoint-" + type.toLowerCase() + "-ledger-" + new Date().toISOString().slice(0,10) + ".csv";
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      onNotice("Ledger export created from " + rows.length + " stored entries.");
+    } catch { onNotice("Ledger export service unavailable."); }
+    finally { setSaving(false); }
+  }
+
+  const selectedProduct = products.find(p => p.sku === selectedSku);
+  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase()));
+  return <div className="subpage">
+    <div className="welcome-row"><div><div className="eyebrow">OMNIPOINT WORKSPACE</div><h1>{titles[section]}</h1><p className="page-description">{descriptions[section]}</p></div></div>
+    {section === "Inventory" && <>
+      <div className="panel table-panel">
+        <div className="panel-header"><div><h3>Product catalogue</h3><p>{inventorySource === "cloudflare" ? "Current inventory records from OmniPoint's operations database" : "The operations service is unavailable. No sample records are displayed."}</p></div><button className="secondary-button" onClick={() => setShowProductForm(!showProductForm)}><Plus size={16}/>{showProductForm ? "Cancel" : "Add product"}</button></div>
+        {showProductForm && <form onSubmit={createProduct} className="product-form">
+          <label className="field-label">Product name<input required minLength={2} maxLength={180} className="form-input" value={newProduct.name} onChange={e=>setNewProduct({...newProduct,name:e.target.value})}/></label>
+          <label className="field-label">SKU / code<input required pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,63}" className="form-input" value={newProduct.sku} onChange={e=>setNewProduct({...newProduct,sku:e.target.value.toUpperCase()})}/></label>
+          <label className="field-label">Category<input maxLength={80} className="form-input" value={newProduct.category} onChange={e=>setNewProduct({...newProduct,category:e.target.value})}/></label>
+          <label className="field-label">Cost price (UGX)<input required type="number" min="0" step="1" className="form-input" value={newProduct.costPrice} onChange={e=>setNewProduct({...newProduct,costPrice:e.target.value})}/></label>
+          <label className="field-label">Selling price (UGX)<input required type="number" min="0" step="1" className="form-input" value={newProduct.sellingPrice} onChange={e=>setNewProduct({...newProduct,sellingPrice:e.target.value})}/></label>
+          <label className="field-label">Opening stock<input required type="number" min="0" step="1" className="form-input" value={newProduct.openingStock} onChange={e=>setNewProduct({...newProduct,openingStock:e.target.value})}/></label>
+          <label className="field-label">Reorder level<input required type="number" min="0" step="1" className="form-input" value={newProduct.reorderLevel} onChange={e=>setNewProduct({...newProduct,reorderLevel:e.target.value})}/></label>
+          <button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save product and opening stock"}</button>
+        </form>}
+        <div className="search-box"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, SKU, category…"/></div>
+        <div className="table-wrap"><table><thead><tr><th>PRODUCT</th><th>SKU</th><th>CATEGORY</th><th>STOCK</th><th>SELLING PRICE (UGX)</th><th>STATUS</th></tr></thead><tbody>{products.filter(p=>[p.name,p.sku,p.category].some(v=>v.toLowerCase().includes(query.toLowerCase()))).map(p=><tr key={p.id}><td><strong>{p.name}</strong></td><td className="mono">{p.sku}</td><td>{p.category}</td><td>{p.stock}</td><td>{p.sellingPrice.toLocaleString("en-UG")}</td><td><span className={p.stock<=p.reorderLevel?"status-low":"status-ok"}>{p.status}</span></td></tr>)}</tbody></table></div>
+        {products.length===0 && <p className="empty-state">{inventorySource==="cloudflare" ? "No products have been recorded yet. Add your first real product above." : "Inventory records could not be loaded."}</p>}
+      </div>
+      {products.length>0 && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Stock adjustment</h3><p>Every adjustment records the operator and reason.</p></div><Boxes size={20} className="panel-title-icon"/></div>
+        <form className="product-form" onSubmit={adjustStock}>
+          <label className="field-label">Product<select className="form-input" required value={adjustProductId} onChange={e=>setAdjustProductId(e.target.value)}><option value="">Select product</option>{products.map(p=><option value={p.id} key={p.id}>{p.name} · {p.sku} · {p.stock} on hand</option>)}</select></label>
+          <label className="field-label">Quantity change (+/-)<input className="form-input" required type="number" step="1" min="-100000000" value={quantityDelta} onChange={e=>setQuantityDelta(e.target.value)}/></label>
+          <label className="field-label">Reason<input className="form-input" required minLength={4} maxLength={500} value={adjustmentReason} onChange={e=>setAdjustmentReason(e.target.value)}/></label>
+          <button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Record stock adjustment"}</button>
+        </form>
+      </div>}
+    </>}
+    {section === "Retail POS" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>New cash sale</h3><p>Stock, receipt, ledger entries, and audit history are posted together.</p></div><ShoppingBag size={20} className="panel-title-icon"/></div><form onSubmit={completeSale} className="product-form"><label className="field-label">Find a product<input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or SKU"/></label><label className="field-label">Product<select className="form-input" required value={selectedSku} onChange={e=>setSelectedSku(e.target.value)}><option value="">Select product</option>{filtered.filter(p=>p.stock>0).map(p=><option key={p.id} value={p.sku}>{p.name} · {p.sku} · {p.stock} available · UGX {p.sellingPrice.toLocaleString("en-UG")}</option>)}</select></label><label className="field-label">Quantity<input className="form-input" required type="number" min="1" max={selectedProduct?.stock ?? 1} step="1" value={quantity} onChange={e=>setQuantity(e.target.value)}/></label><div className="sale-total"><span>Total due</span><strong>UGX {((selectedProduct?.sellingPrice ?? 0) * Math.max(0, Number(quantity)||0)).toLocaleString("en-UG")}</strong></div><button className="primary-button" type="submit" disabled={saving || products.length===0}>{saving ? "Posting sale…" : "Complete cash sale"}</button></form>{products.length===0 && <p className="empty-state">No available stock is recorded. Add inventory before creating a sale.</p>}</div>}
+    {section === "Fintech Agency" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Agency transaction</h3><p>Mobile-money execution requires a verified provider connection.</p></div><Smartphone size={20} className="panel-title-icon"/></div><div className="segmented"><button type="button" className={serviceTab==="Cash in"?"selected":""} onClick={()=>setServiceTab("Cash in")}>Cash in</button><button type="button" className={serviceTab==="Cash out"?"selected":""} onClick={()=>setServiceTab("Cash out")}>Cash out</button></div><label className="field-label">Amount (UGX)</label><input className="form-input" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,""))} placeholder="Enter amount"/><div className="inline-warning"><ShieldCheck size={17}/><span>Provider execution is not yet configured. No mobile-money request will be sent or marked successful from this workspace until an approved adapter and callback verification are enabled.</span></div><button className="primary-button" disabled>Provider connection required</button></div>}
+    {section === "Reconciliation" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Ledger reconciliation</h3><p>Export actual ledger entries to compare with cash counts and provider statements.</p></div><Activity size={20} className="panel-title-icon"/></div><div className="report-item"><div><strong>Retail ledger</strong><span>Sales receipts, cash and cost-of-goods entries</span></div><button className="secondary-button" onClick={()=>exportLedger("RETAIL")} disabled={saving}>Export ledger CSV</button></div><div className="report-item"><div><strong>Agency ledger</strong><span>Provider-confirmed activity only</span></div><button className="secondary-button" onClick={()=>exportLedger("FINTECH_AGENCY")} disabled={saving}>Export ledger CSV</button></div><div className="inline-warning"><ShieldCheck size={17}/><span>Final reconciliation approval requires counted balances and provider statements; no reconciliation is marked complete automatically.</span></div></div>}
+    {section === "Reports" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Operational reports</h3><p>Exports are generated from stored records, not illustrative figures.</p></div><Download size={20} className="panel-title-icon"/></div><div className="report-item"><div className="quick-icon violet-bg"><ShoppingBag size={18}/></div><div><strong>Retail ledger</strong><span>Posted sales, cash and inventory accounting entries</span></div><button className="secondary-button" onClick={()=>exportLedger("RETAIL")} disabled={saving}>Export CSV <Download size={14}/></button></div><div className="report-item"><div className="quick-icon blue-bg"><Wallet size={18}/></div><div><strong>Agency ledger</strong><span>Provider-confirmed agency accounting entries</span></div><button className="secondary-button" onClick={()=>exportLedger("FINTECH_AGENCY")} disabled={saving}>Export CSV <Download size={14}/></button></div></div>}
+    {section === "Team & Access" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Team access</h3><p>Access is granted only to identities with an active OmniPoint staff membership.</p></div><ShieldCheck size={20} className="panel-title-icon"/></div><div className="inline-warning"><ShieldCheck size={17}/><span>Staff provisioning is restricted to the approved management process. No users or roles are fabricated on this screen.</span></div><p className="empty-state">Staff records are managed through the secured staff administration workflow.</p></div>}
+    {section === "Settings" && <div className="panel workflow-panel"><div className="panel-header"><div><h3>Workspace configuration</h3><p>Business configuration and integration readiness.</p></div><Settings2 size={20} className="panel-title-icon"/></div>{[["Business identity","OmniPoint UG Limited"],["Base currency","UGX — Ugandan shilling"],["Accounting streams","Retail and fintech agency · separate"],["Tax integration","EFRIS · integration approval required"],["Mobile money","Provider adapter and credentials required"],["Alerts","Notification provider configuration required"]].map(([k,v])=><div className="setting-row" key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>}
   </div>;
 }
