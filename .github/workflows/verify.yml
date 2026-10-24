@@ -61,6 +61,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Validate Prisma schema
         run: npm run db:validate
+      - name: Type-check Cloudflare Worker
+        run: npm run check:worker
       - name: Lint
         run: npm run lint
       - name: Build
