@@ -48,13 +48,13 @@ export async function POST(request: Request) {
 
   const suppliedKey = request.headers.get("idempotency-key") || "";
   const idempotencyKey = /^[A-Za-z0-9._:-]{8,128}$/.test(suppliedKey) ? suppliedKey : randomUUID();
-  const result = await callOmniPointApi(staff, "/api/sales", {
+  const result = await callOmniPointApi<Record<string, unknown>>(staff, "/api/sales", {
     method: "POST",
     body: { paymentMethod: "CASH", items },
     idempotencyKey,
   });
   return NextResponse.json(
-    result.ok ? { ...result.body as object, idempotencyKey } : { ...result.body, idempotencyKey },
+    { ...result.body, idempotencyKey },
     { status: result.status, headers: { "Cache-Control": "no-store" } },
   );
 }
