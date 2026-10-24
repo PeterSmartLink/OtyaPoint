@@ -1,21 +1,34 @@
 # OmniPoint implementation gates
 
+**Legal owner:** Otya Hold Ltd. **Operating product/business name:** OmniPoint.
+
+## Immediate release blockers from the 2026-10-24 read-only audit
+
+- [ ] Reconcile the production D1 schema with reviewed migration files. Production currently lacks `company_id` on several operational tables that have it in the migration-test schema.
+- [ ] Clean up the migration-test baseline or document its legacy schema explicitly. It contains old Prisma-style tables alongside the new `omni_*` schema.
+- [ ] Review every protected API query and write for server-derived company and branch scoping. Prove tenant isolation with adversarial tests.
+- [ ] Verify the current D1 schemas using read-only introspection and update the resource inventory. The previous statement that production D1 has zero tables was incorrect.
+- [ ] Confirm the dedicated OmniPoint Worker is absent or present through a fresh inventory; do not infer deployment from the config file.
+
 ## Stage 0 — Isolated foundation
 
 - [x] Dedicated OmniPoint D1, R2, KV and queue resources provisioned.
 - [x] Separate OmniPoint migration-test D1 exists.
 - [x] Existing Otya resources inventoried and protected from reuse.
 - [ ] Dedicated OmniPoint Worker configuration and schema reviewed.
-- [ ] Contract tests run against the isolated test database.
-- [ ] No production route or custom domain attached.
+- [ ] Production/test schema parity and migration order reconciled.
+- [ ] Contract tests run against a clean isolated test database.
+- [ ] No production route or custom domain attached until release gates pass.
 
 ## Stage 1 — Identity and staff authorization
 
 - [ ] Confirm Otya Auth token issuer, signature algorithm/key, issuer, audience, expiry and revocation behavior from source and deployed configuration.
 - [ ] Add OmniPoint local staff membership, company, branch, role, status and approval records.
 - [ ] Require server-side identity-to-staff mapping on every protected API route.
+- [ ] Scope every business read/write to the authorized company and branch using server-side membership data.
 - [ ] Add rate limiting and audit events for authentication failures and privileged operations.
-- [ ] Never accept role or actor identity from request bodies.
+- [ ] Never accept role, company, branch or actor identity from request bodies.
+- [ ] Secure owner recovery and staff provisioning; no public bootstrap-admin route.
 
 ## Stage 2 — Retail inventory and POS
 
@@ -59,9 +72,10 @@ A stage is not complete until all are true:
 
 1. CI build, lint, type checks, schema validation and tests pass.
 2. A second review confirms the security boundary and data ownership.
-3. Backups and restore have been tested for any stateful release.
-4. Logs and alerts are active without exposing secrets or personal data.
-5. No provider operation is represented as successful without provider truth.
-6. Rollback steps are written and rehearsed.
-7. The exact deployment target and affected resources are known.
-8. Production activation is a separate controlled step; a preview deployment is not a production cutover.
+3. Tenant-isolation tests pass against the exact schema intended for deployment.
+4. Backups and restore have been tested for any stateful release.
+5. Logs and alerts are active without exposing secrets or personal data.
+6. No provider operation is represented as successful without provider truth.
+7. Rollback steps are written and rehearsed.
+8. The exact deployment target and affected resources are known.
+9. Production activation is a separate controlled step; a preview deployment is not a production cutover.
