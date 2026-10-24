@@ -18,7 +18,7 @@ export interface Env {
   BACKUPS: R2Bucket;
   CACHE: KVNamespace;
   JOBS: Queue;
-  AUTH?: { fetch(request: Request): Promise<Response> };
+  AUTH_HMAC_SECRET?: string;
 }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Staff = { id: string; identity_subject: string; company_id: string; branch_id: string | null; role: Role; status: string };
@@ -41,28 +41,44 @@ const isRole = (value: unknown): value is Role => typeof value === "string" && r
 const canManage = (staff: Staff) => ["SOVEREIGN", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(staff.role);
 const isResponse = (value: Staff | Response): value is Response => value instanceof Response;
 
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const raw = atob(padded);
+  return Uint8Array.from(raw, char => char.charCodeAt(0));
+}
 async function authenticate(request: Request, env: Env): Promise<Staff | Response> {
   const header = request.headers.get("authorization") || "";
-  if (!header.startsWith("Bearer ") || header.length > 8192) return json({ error: "unauthorized" }, 401);
-  if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
+  const parts = header.startsWith("Bearer ") ? header.slice(7).split(".") : [];
+  if (parts.length !== 3 || parts.some(part => !part) || header.length > 8192) return json({ error: "unauthorized" }, 401);
+  if (!env.AUTH_HMAC_SECRET) return json({ error: "auth_service_unavailable" }, 503);
   try {
-    const verifiedResponse = await env.AUTH.fetch(new Request("https://auth/auth/verify", {
-      method: "GET",
-      headers: { Authorization: header, Accept: "application/json" },
-      signal: AbortSignal.timeout(8000)
-    }));
-    if (!verifiedResponse.ok) return json({ error: "unauthorized" }, 401);
-    const verified = await verifiedResponse.json() as { ok?: boolean; user_id?: unknown; email?: unknown };
-    if (verified.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
+    const tokenHeader = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[0]))) as { alg?: string; typ?: string };
+    const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[1]))) as { sub?: unknown; exp?: unknown; iat?: unknown; iss?: unknown; aud?: unknown };
+    if (tokenHeader.alg !== "HS256" || tokenHeader.typ !== "JWT" ||
+      typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 256 ||
+      typeof claims.exp !== "number" || !Number.isFinite(claims.exp) ||
+      claims.exp <= Math.floor(Date.now() / 1000) ||
+      typeof claims.iat !== "number" || claims.iat > Math.floor(Date.now() / 1000) + 30 ||
+      claims.exp - claims.iat > 300 || claims.iss !== "omnipoint-web" || claims.aud !== "omnipoint-api") {
       return json({ error: "unauthorized" }, 401);
     }
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(env.AUTH_HMAC_SECRET),
+      { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
+    );
+    const valid = await crypto.subtle.verify(
+      "HMAC", key, decodeBase64Url(parts[2]),
+      new TextEncoder().encode(parts[0] + "." + parts[1])
+    );
+    if (!valid) return json({ error: "unauthorized" }, 401);
     const staff = await env.DB.prepare(
       "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
-    ).bind(verified.user_id).first<Staff>();
+    ).bind(claims.sub).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
     return staff;
   } catch {
-    return json({ error: "auth_service_unavailable" }, 503);
+    return json({ error: "unauthorized" }, 401);
   }
 }
 async function audit(env: Env, actor: string, action: string, entityType: string, entityId: string | null, reason: string | null, before: unknown, after: unknown, requestId: string) {
