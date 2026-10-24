@@ -113,11 +113,11 @@ export default {
       if (request.method === "GET" && url.pathname === "/api/summary") {
         if (!canManage(staff)) return json({ error: "forbidden" }, 403);
         const [products, sales, agency, retailLedger, agencyLedger] = await Promise.all([
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN quantity_on_hand <= reorder_level THEN 1 ELSE 0 END),0) AS low_stock FROM omni_products WHERE is_active=1 AND company_id=?1").first<{ count: number; low_stock: number }>(),
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM omni_retail_sales WHERE status='COMPLETED' AND company_id=?1").first<{ count: number; total: number }>(),
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN provider_status='SUCCEEDED' THEN amount ELSE 0 END),0) AS succeeded_amount FROM omni_agency_transactions WHERE company_id=?1").first<{ count: number; succeeded_amount: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='RETAIL' AND company_id=?1").first<{ debit: number; credit: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='FINTECH_AGENCY' AND company_id=?1").first<{ debit: number; credit: number }>()
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN quantity_on_hand <= reorder_level THEN 1 ELSE 0 END),0) AS low_stock FROM omni_products WHERE is_active=1 AND company_id=?1").bind(staff.company_id).first<{ count: number; low_stock: number }>(),
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM omni_retail_sales WHERE status='COMPLETED' AND company_id=?1").bind(staff.company_id).first<{ count: number; total: number }>(),
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN provider_status='SUCCEEDED' THEN amount ELSE 0 END),0) AS succeeded_amount FROM omni_agency_transactions WHERE company_id=?1").bind(staff.company_id).first<{ count: number; succeeded_amount: number }>(),
+          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='RETAIL' AND company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>(),
+          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='FINTECH_AGENCY' AND company_id=?1").bind(staff.company_id).first<{ debit: number; credit: number }>()
         ]);
         return json({
           currency: "UGX",
@@ -202,10 +202,10 @@ export default {
         }
         const existing = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
         if (existing) return json({ data: existing, replayed: true, requestId: rid });
-        const placeholders = normalized.map((_, i) => "?" + (i + 1)).join(",");
+        const placeholders = normalized.map((_, i) => "?" + (i + 2)).join(",");
         const productRows = await env.DB.prepare(
-          "SELECT id,sku,name,cost_price,selling_price,quantity_on_hand,is_active FROM omni_products WHERE id IN (" + placeholders + ")"
-        ).bind(...normalized.map(item => item.productId)).all<{ id: string; sku: string; name: string; cost_price: number; selling_price: number; quantity_on_hand: number; is_active: number }>();
+          "SELECT id,sku,name,cost_price,selling_price,quantity_on_hand,is_active FROM omni_products WHERE company_id=?1 AND id IN (" + placeholders + ")"
+        ).bind(staff.company_id, ...normalized.map(item => item.productId)).all<{ id: string; sku: string; name: string; cost_price: number; selling_price: number; quantity_on_hand: number; is_active: number }>();
         const productMap = new Map(productRows.results.map(product => [product.id, product]));
         if (productMap.size !== normalized.length) return json({ error: "product_not_available" }, 409);
         let subtotal = 0; let costOfGoods = 0;
