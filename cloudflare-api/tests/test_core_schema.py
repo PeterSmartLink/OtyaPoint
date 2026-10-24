@@ -105,7 +105,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
         self.db.execute(
             """INSERT INTO omni_staff_memberships
                (id, identity_subject, company_id, role, status)
-               VALUES ('staff-1', 'subject-1', 'company-1', 'MANAGER', 'ACTIVE')"""
+               VALUES ('staff-1', 'subject-1', 'company-1', 'MANAGER', 'PENDING')"""
         )
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute(
@@ -115,7 +115,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             )
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.execute(
-                "UPDATE omni_staff_memberships SET status='ACTIVE', identity_status='VERIFIED' WHERE id='staff-1'"
+                "UPDATE omni_staff_memberships SET status='ACTIVE', identity_status='REJECTED' WHERE id='staff-1'"
             )
         self.add_product()
         self.db.execute(
