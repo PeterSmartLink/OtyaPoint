@@ -8,7 +8,7 @@ This is a dedicated OmniPoint Worker API path. It uses a namespaced D1 schema an
 - `wrangler.omnipoint.test.toml`: isolated API configuration using the migration-test D1 database only.
 - `wrangler.omnipoint.toml`: dedicated production binding definition for omnipoint-prod, private R2, cache and the jobs queue. It has no custom domain and must not be deployed until the release gates pass.
 
-The new core schema was applied to the isolated migration-test database for validation. It has not been applied to the production database by this branch.
+The core schema and additive company-scope migration were applied to the isolated migration-test database for validation. Its migration baseline is recorded there. Neither migration has been applied to the production database by this branch.
 
 ## API surface
 
@@ -16,7 +16,7 @@ The new core schema was applied to the isolated migration-test database for vali
 - `GET /api/products`: authenticated inventory read.
 - `POST /api/products`: manager-authorized product creation, with audit record.
 - `POST /api/stock-adjustments`: manager-authorized audited movement; D1 triggers enforce quantity invariants.
-- `POST /api/sales`: cash-only retail sale. Requires an idempotency-key header. The sale, lines, stock movements, balanced retail ledger entries and audit record are submitted in one D1 batch; database triggers reject insufficient stock.
+- `POST /api/sales`: cash-only retail sale. Requires an idempotency-key header. Every read and write is scoped to the authenticated staff member's `company_id`; the sale, lines, stock movements, balanced retail ledger entries and audit record are submitted in one D1 batch; database triggers reject insufficient stock and cross-company product use.
 - `GET /api/summary` and `GET /api/ledger`: manager-authorized views.
 - `POST /api/agency-transactions`: deliberately disabled with HTTP 501. No provider call is made and no transaction is represented as successful.
 
