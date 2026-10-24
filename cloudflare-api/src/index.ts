@@ -90,9 +90,31 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       try {
         const found = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'omni_%'").all<{ name: string }>();
-        const expected = ["omni_products", "omni_retail_sales", "omni_retail_sale_lines", "omni_stock_movements", "omni_agency_transactions", "omni_ledger_entries", "omni_reconciliation_sessions", "omni_audit_events", "omni_staff_memberships"];
+        const expectedColumns: Record<string, string[]> = {
+          omni_products: ["id", "sku", "name", "company_id"],
+          omni_retail_sales: ["id", "receipt_number", "idempotency_key", "company_id"],
+          omni_retail_sale_lines: ["id", "sale_id", "product_id"],
+          omni_stock_movements: ["id", "product_id", "actor_id", "company_id"],
+          omni_agency_transactions: ["id", "reference", "idempotency_key", "company_id"],
+          omni_ledger_entries: ["id", "ledger_type", "debit", "credit", "company_id"],
+          omni_reconciliation_sessions: ["id", "ledger_type", "business_date", "company_id"],
+          omni_audit_events: ["id", "actor_id", "action", "company_id"],
+          omni_staff_memberships: ["id", "identity_subject", "company_id", "role", "status", "display_name", "email", "agent_id"]
+        };
         const names = new Set(found.results.map(row => row.name));
-        const ready = expected.every(name => names.has(name));
+        const missingColumns: string[] = [];
+        for (const [table, columns] of Object.entries(expectedColumns)) {
+          if (!names.has(table)) {
+            missingColumns.push(table);
+            continue;
+          }
+          const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+          const actual = new Set(info.results.map(column => column.name));
+          for (const column of columns) {
+            if (!actual.has(column)) missingColumns.push(`${table}.${column}`);
+          }
+        }
+        const ready = missingColumns.length === 0;
         return json({ service: "omnipoint-api", status: ready ? "ok" : "schema_not_ready", schemaReady: ready, requestId: rid }, ready ? 200 : 503);
       } catch {
         return json({ service: "omnipoint-api", status: "database_unavailable", requestId: rid }, 503);
