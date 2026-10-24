@@ -13,7 +13,7 @@
 ## Current facts
 
 - A dedicated production D1 database exists: omnipoint-prod. This branch has not applied its schema.
-- A separate migration-test D1 database exists. The new namespaced OmniPoint schema was applied there for validation; existing tables from the prior test schema were left untouched.
+- A separate migration-test D1 database exists. The namespaced OmniPoint schema and company-scope migration were applied there for validation, with migration baseline entries recorded; existing tables from the prior test schema were left untouched.
 - A separate Worker configuration exists for test and production bindings. The production config has no custom domain and has not been deployed by this branch.
 - The API now has protected product reads, product creation, stock adjustment, cash POS posting, summary and ledger reads in code. The Worker now verifies access tokens through the existing Otya Auth service binding and loads the local OmniPoint role from D1. The dashboard is not yet wired to send its Otya access token, and staff provisioning is incomplete; protected routes should fail closed until an active staff record exists.
 - Agency provider execution remains disabled and returns a non-success response without making provider calls or recording a false success.

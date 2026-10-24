@@ -33,7 +33,7 @@ This plan does not claim that the production schema, authentication bridge, back
 ## Data ownership and migration
 
 1. Do not query Otya databases from OmniPoint or bind OmniPoint writes into otya-core.
-2. Keep staff membership, branch/tenant scope, product catalog, inventory, retail sales, agency transactions, reconciliation, audit events and ledgers in OmniPoint-owned tables.
+2. Keep staff membership, company-scoped product catalog, inventory, retail sales, agency transactions, reconciliation, audit events and ledgers in OmniPoint-owned tables. API reads/writes must derive company_id from the verified local staff membership, never from the request body. Branch-level inventory remains a separate design gate before enabling multiple branches with independent stock.
 3. Use stable verified identity subjects from Otya Auth, but do not copy passwords, refresh tokens or session secrets into OmniPoint.
 4. Do not copy legacy records until a migration mapping and row-level comparison are approved.
 5. Do not delete the legacy PostgreSQL/Supabase project. First take an approved consistent export, validate row counts and balances, restore into an isolated target, and document rollback.
