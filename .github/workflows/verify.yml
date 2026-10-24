@@ -51,6 +51,8 @@ jobs:
           done
       - name: Test isolated SQLite schema compatibility
         run: python3 migration/d1/test_schema.py
+      - name: Test OmniPoint D1 core schema and invariants
+        run: python3 cloudflare-api/tests/test_core_schema.py
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
