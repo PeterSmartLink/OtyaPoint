@@ -36,8 +36,6 @@ queue = "omnipoint-jobs"
 # authorization contract, idempotency and retry/DLQ behavior pass tests.
 
 
-# Validate Otya access tokens through the existing Auth Worker; do not duplicate
-# passwords, signing keys or refresh-token storage in OmniPoint.
-[[services]]
-binding = "AUTH"
-service = "otya-auth"
+# Configure AUTH_HMAC_SECRET with Wrangler's secret command; never commit it.
+# Configure the same high-entropy secret as OMNIPOINT_API_HMAC_SECRET in the
+# server-side web deployment environment. It must never be a NEXT_PUBLIC variable.
