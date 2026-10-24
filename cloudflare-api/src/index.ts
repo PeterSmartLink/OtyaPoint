@@ -247,7 +247,7 @@ export default {
         } catch (error) {
           if (error instanceof Error && (error.message.includes("INSUFFICIENT_STOCK") || error.message.includes("PRODUCT_NOT_AVAILABLE"))) return json({ error: "stock_conflict_or_product_unavailable" }, 409);
           if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-            const replay = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1").bind(idempotencyKey).first<{ id: string; receipt_number: string; total: number; status: string }>();
+            const replay = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
             if (replay) return json({ data: replay, replayed: true, requestId: rid });
             return json({ error: "duplicate_conflict" }, 409);
           }
