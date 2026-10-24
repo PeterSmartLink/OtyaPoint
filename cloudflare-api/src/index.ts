@@ -105,19 +105,19 @@ export default {
     try {
       if (request.method === "GET" && url.pathname === "/api/products") {
         const result = await env.DB.prepare(
-          "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 ORDER BY name LIMIT 500"
-        ).all();
+          "SELECT id, sku, name, description, category, cost_price, selling_price, quantity_on_hand, reorder_level, created_at, updated_at FROM omni_products WHERE is_active = 1 AND company_id = ?1 ORDER BY name LIMIT 500"
+        ).bind(staff.company_id).all();
         return json({ data: result.results, count: result.results.length, requestId: rid });
       }
 
       if (request.method === "GET" && url.pathname === "/api/summary") {
         if (!canManage(staff)) return json({ error: "forbidden" }, 403);
         const [products, sales, agency, retailLedger, agencyLedger] = await Promise.all([
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN quantity_on_hand <= reorder_level THEN 1 ELSE 0 END),0) AS low_stock FROM omni_products WHERE is_active=1").first<{ count: number; low_stock: number }>(),
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM omni_retail_sales WHERE status='COMPLETED'").first<{ count: number; total: number }>(),
-          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN provider_status='SUCCEEDED' THEN amount ELSE 0 END),0) AS succeeded_amount FROM omni_agency_transactions").first<{ count: number; succeeded_amount: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='RETAIL'").first<{ debit: number; credit: number }>(),
-          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='FINTECH_AGENCY'").first<{ debit: number; credit: number }>()
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN quantity_on_hand <= reorder_level THEN 1 ELSE 0 END),0) AS low_stock FROM omni_products WHERE is_active=1 AND company_id=?1").first<{ count: number; low_stock: number }>(),
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total FROM omni_retail_sales WHERE status='COMPLETED' AND company_id=?1").first<{ count: number; total: number }>(),
+          env.DB.prepare("SELECT COUNT(*) AS count, COALESCE(SUM(CASE WHEN provider_status='SUCCEEDED' THEN amount ELSE 0 END),0) AS succeeded_amount FROM omni_agency_transactions WHERE company_id=?1").first<{ count: number; succeeded_amount: number }>(),
+          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='RETAIL' AND company_id=?1").first<{ debit: number; credit: number }>(),
+          env.DB.prepare("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries WHERE ledger_type='FINTECH_AGENCY' AND company_id=?1").first<{ debit: number; credit: number }>()
         ]);
         return json({
           currency: "UGX",
@@ -143,10 +143,10 @@ export default {
         const product = { id, sku, name, category, costPrice: cost, sellingPrice: price, quantityOnHand: 0, reorderLevel: reorder };
         try {
           await env.DB.batch([
-            env.DB.prepare("INSERT INTO omni_products (id,sku,name,description,category,cost_price,selling_price,quantity_on_hand,reorder_level) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8)")
-              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder),
-            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created',?4,?5)")
-              .bind(uuid(), staff.id, id, JSON.stringify(product), rid)
+            env.DB.prepare("INSERT INTO omni_products (id,sku,name,description,category,cost_price,selling_price,quantity_on_hand,reorder_level,company_id) VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8,?9)")
+              .bind(id, sku, name, safeText(body.description, 1000) || null, category, cost, price, reorder, staff.company_id),
+            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'CREATE','PRODUCT',?3,'Product created',?4,?5,?6)")
+              .bind(uuid(), staff.id, id, JSON.stringify(product), rid, staff.company_id)
           ]);
         } catch (error) {
           if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) return json({ error: "sku_conflict" }, 409);
@@ -162,17 +162,17 @@ export default {
         const delta = Number.isSafeInteger(body.quantityDelta) ? Number(body.quantityDelta) : null;
         const reason = safeText(body.reason, 500);
         if (!productId || delta === null || delta === 0 || !reason) return json({ error: "invalid_stock_adjustment" }, 400);
-        const product = await env.DB.prepare("SELECT id, sku, name, quantity_on_hand, cost_price, is_active FROM omni_products WHERE id=?1").bind(productId).first<{ id: string; sku: string; name: string; quantity_on_hand: number; cost_price: number; is_active: number }>();
+        const product = await env.DB.prepare("SELECT id, sku, name, quantity_on_hand, cost_price, is_active FROM omni_products WHERE id=?1 AND company_id=?2").bind(productId, staff.company_id).first<{ id: string; sku: string; name: string; quantity_on_hand: number; cost_price: number; is_active: number }>();
         if (!product || product.is_active !== 1) return json({ error: "product_not_available" }, 404);
         const nextQuantity = Number(product.quantity_on_hand) + delta;
         if (!Number.isSafeInteger(nextQuantity) || nextQuantity < 0) return json({ error: "insufficient_stock" }, 409);
         const movementId = uuid();
         try {
           await env.DB.batch([
-            env.DB.prepare("INSERT INTO omni_stock_movements (id,product_id,actor_id,movement_type,quantity_delta,quantity_after,unit_cost,reference_type,reference_id,reason) VALUES (?1,?2,?3,'ADJUSTMENT',?4,?5,?6,'STOCK_ADJUSTMENT',?1,?7)")
-              .bind(movementId, productId, staff.id, delta, nextQuantity, product.cost_price, reason),
-            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id) VALUES (?1,?2,'ADJUST_STOCK','PRODUCT',?3,?4,?5,?6,?7)")
-              .bind(uuid(), staff.id, productId, reason, JSON.stringify({ quantityOnHand: product.quantity_on_hand }), JSON.stringify({ quantityOnHand: nextQuantity }), rid)
+            env.DB.prepare("INSERT INTO omni_stock_movements (id,product_id,actor_id,movement_type,quantity_delta,quantity_after,unit_cost,reference_type,reference_id,reason,company_id) VALUES (?1,?2,?3,'ADJUSTMENT',?4,?5,?6,'STOCK_ADJUSTMENT',?1,?7,?8)")
+              .bind(movementId, productId, staff.id, delta, nextQuantity, product.cost_price, reason, staff.company_id),
+            env.DB.prepare("INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,before_state,after_state,request_id,company_id) VALUES (?1,?2,'ADJUST_STOCK','PRODUCT',?3,?4,?5,?6,?7,?8)")
+              .bind(uuid(), staff.id, productId, reason, JSON.stringify({ quantityOnHand: product.quantity_on_hand }), JSON.stringify({ quantityOnHand: nextQuantity }), rid, staff.company_id)
           ]);
         } catch (error) {
           if (error instanceof Error && (error.message.includes("INSUFFICIENT_STOCK") || error.message.includes("STOCK_MOVEMENT_MISMATCH"))) return json({ error: "stock_conflict_retry" }, 409);
@@ -200,7 +200,7 @@ export default {
           if (!productId || quantity === null || quantity > 10000 || seen.has(productId)) return json({ error: "invalid_sale_items" }, 400);
           seen.add(productId); normalized.push({ productId, quantity });
         }
-        const existing = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1").bind(idempotencyKey).first<{ id: string; receipt_number: string; total: number; status: string }>();
+        const existing = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
         if (existing) return json({ data: existing, replayed: true, requestId: rid });
         const placeholders = normalized.map((_, i) => "?" + (i + 1)).join(",");
         const productRows = await env.DB.prepare(
@@ -223,8 +223,8 @@ export default {
         }
         if (!Number.isSafeInteger(subtotal) || !Number.isSafeInteger(costOfGoods) || subtotal <= 0) return json({ error: "invalid_sale_total" }, 400);
         const statements: D1Statement[] = [
-          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6)")
-            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id)
+          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id,company_id) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6,?7)")
+            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id, staff.company_id)
         ];
         for (const line of saleLines) {
           statements.push(env.DB.prepare(
@@ -232,16 +232,16 @@ export default {
           ).bind(line.id, saleId, line.productId, line.sku, line.name, line.quantity, line.price, line.cost, line.total));
         }
         statements.push(
-          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description) VALUES (?1,'RETAIL','CASH_ON_HAND','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cash received for retail sale'),(?5,'RETAIL','SALES_REVENUE','UGX',0,?2,'RETAIL_SALE',?3,?6,'Retail sales revenue')")
-            .bind(uuid(), subtotal, saleId, idempotencyKey + ":cash", uuid(), idempotencyKey + ":revenue")
+          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,'RETAIL','CASH_ON_HAND','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cash received for retail sale',?7),(?5,'RETAIL','SALES_REVENUE','UGX',0,?2,'RETAIL_SALE',?3,?6,'Retail sales revenue',?7)")
+            .bind(uuid(), subtotal, saleId, idempotencyKey + ":cash", uuid(), idempotencyKey + ":revenue", staff.company_id)
         );
         if (costOfGoods > 0) statements.push(
-          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description) VALUES (?1,'RETAIL','COST_OF_GOODS_SOLD','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cost of goods sold'),(?5,'RETAIL','INVENTORY','UGX',0,?2,'RETAIL_SALE',?3,?6,'Inventory relieved at cost')")
-            .bind(uuid(), costOfGoods, saleId, idempotencyKey + ":cogs", uuid(), idempotencyKey + ":inventory")
+          env.DB.prepare("INSERT INTO omni_ledger_entries (id,ledger_type,account_code,currency,debit,credit,source_type,source_id,idempotency_key,description,company_id) VALUES (?1,'RETAIL','COST_OF_GOODS_SOLD','UGX',?2,0,'RETAIL_SALE',?3,?4,'Cost of goods sold',?7),(?5,'RETAIL','INVENTORY','UGX',0,?2,'RETAIL_SALE',?3,?6,'Inventory relieved at cost',?7)")
+            .bind(uuid(), costOfGoods, saleId, idempotencyKey + ":cogs", uuid(), idempotencyKey + ":inventory", staff.company_id)
         );
         statements.push(env.DB.prepare(
-          "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id) VALUES (?1,?2,'POST_SALE','RETAIL_SALE',?3,'Cash sale posted',?4,?5)"
-        ).bind(uuid(), staff.id, saleId, JSON.stringify({ receiptNumber, subtotal, costOfGoods, currency: "UGX" }), rid));
+          "INSERT INTO omni_audit_events (id,actor_id,action,entity_type,entity_id,reason,after_state,request_id,company_id) VALUES (?1,?2,'POST_SALE','RETAIL_SALE',?3,'Cash sale posted',?4,?5,?6)"
+        ).bind(uuid(), staff.id, saleId, JSON.stringify({ receiptNumber, subtotal, costOfGoods, currency: "UGX" }), rid, staff.company_id));
         try {
           await env.DB.batch(statements);
         } catch (error) {
@@ -265,8 +265,8 @@ export default {
         const type = url.searchParams.get("type");
         if (type && type !== "RETAIL" && type !== "FINTECH_AGENCY") return json({ error: "invalid_ledger_type" }, 400);
         const query = type
-          ? env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries WHERE ledger_type=?1 ORDER BY effective_at DESC LIMIT 500").bind(type)
-          : env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries ORDER BY effective_at DESC LIMIT 500");
+          ? env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries WHERE ledger_type=?1 AND company_id=?2 ORDER BY effective_at DESC LIMIT 500").bind(type, staff.company_id)
+          : env.DB.prepare("SELECT id,ledger_type,account_code,currency,debit,credit,source_type,source_id,description,effective_at,created_at FROM omni_ledger_entries WHERE company_id=?1 ORDER BY effective_at DESC LIMIT 500").bind(staff.company_id);
         const result = await query.all();
         return json({ data: result.results, requestId: rid });
       }
