@@ -130,7 +130,7 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
           .bind(crypto.randomUUID(),auth.sub,productId,reason,JSON.stringify({quantityOnHand:before.quantityOnHand}),JSON.stringify({quantityOnHand:after,quantityDelta:delta}),requestId,after)
       ]);
       const updateMeta=(results[0] as {meta?:{changes?:number}}|undefined)?.meta;
-      if(updateMeta?.changes===0) return json({error:"stock_changed_retry"},409);
+      if(updateMeta?.changes!==1) return json({error:"stock_changed_retry"},409);
       return json({data:{id:productId,quantityOnHand:after,quantityDelta:delta},requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
