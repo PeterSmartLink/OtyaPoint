@@ -1,6 +1,6 @@
 # OmniPoint
 
-OmniPoint is a standalone retail and fintech agency operations platform for Uganda, operated by OmniPoint UG Limited under Otya Hold.
+OmniPoint is the retail and fintech agency operations business of Otya Hold Ltd, operating as Otya Hold Ltd T/A OmniPoint in Uganda.
 
 ## Current implementation status
 
