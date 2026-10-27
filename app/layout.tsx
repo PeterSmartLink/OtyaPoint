@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "OmniPoint — Business Operations",
-  description: "Retail and fintech agency operations, unified with clear financial separation.",
+  description: "Otya Hold Ltd T/A OmniPoint — shop inventory, retail operations and agency workflows.",
   applicationName: "OmniPoint",
 };
 
