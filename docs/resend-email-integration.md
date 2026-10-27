@@ -1,6 +1,6 @@
 # Resend across the Otya ecosystem
 
-Resend is the shared transactional email provider for Otya Hold Ltd services, including Otya Server, Otya accounts, Otya Media-related account/security messages, and OmniPoint operations. Keep one provider integration and one verified sending domain rather than creating disconnected email services per app.
+Resend is the designated shared transactional email provider for Otya Hold Ltd. Otya Auth already has a server-side Resend transport; OmniPoint is being connected through that central service. Otya Media and future Otya services should reuse the same provider when they add email notifications rather than create separate email systems.
 
 ## Existing account verified directly
 
