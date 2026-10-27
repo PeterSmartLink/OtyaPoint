@@ -82,12 +82,15 @@ This roadmap supersedes older steps that describe Supabase as OmniPoint's primar
 - [ ] Verify receipt, tax, cash, stock and agency reconciliation workflows with realistic test scenarios.
 - [ ] Keep secrets in Cloudflare/GitHub secret stores, never in Git, client bundles, logs or screenshots.
 
-## Supabase policy
+## Platform dependency policy — Cloudflare + GitHub only
 
-- Supabase is **not** OmniPoint's primary database or source of truth.
-- Do not use Supabase Auth for new OmniPoint sign-in flows; integrate with Otya Auth after the token contract and staff-membership mapping are tested.
-- Existing Supabase code, migrations and dependencies are legacy implementation to be removed only through a reviewed migration plan—not by deleting dependencies before replacement flows are tested.
-- Any future Supabase recovery target must have an explicit schema/backup format, restore procedure, access policy and failback plan. Never treat it as an automatically synchronized D1 replica.
+- **Cloudflare is the operational platform** for OmniPoint: Workers for application/API logic; D1 for authoritative business records; R2 for private files/backups; Queues/Workflows for durable background work; KV only for non-authoritative cache; and other Cloudflare capabilities only when justified.
+- **GitHub is the source-control and CI/CD system.**
+- Supabase is not part of OmniPoint's target architecture: no primary database, authentication, recovery destination, synchronization path, or operational dependency. Existing Supabase/Prisma code, migrations, environment-variable references, and documentation are legacy material to inventory and retire through reviewed, tested changes. Do not delete them blindly before confirming all required functionality has been replaced.
+- Vercel is not part of OmniPoint's target architecture: no application hosting, API runtime, production deployment, or required build/release dependency. Vercel status checks may appear as historical repository integration metadata; they must not be used as evidence that the Cloudflare application is deployed or production-ready.
+- Appwrite is also outside the chosen OmniPoint operational architecture.
+- Shared identity should use Otya Auth only after its token verification contract and local staff-membership mapping are tested. Do not retain Supabase Auth as a fallback sign-in path.
+- Any future platform exception requires a separately documented owner decision; it must not be introduced implicitly by a dependency, deployment workflow, or recovery script.
 
 ## Production release gate
 
