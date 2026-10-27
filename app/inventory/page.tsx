@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Boxes, ArrowLeft, ShieldCheck, PackagePlus, ClipboardList } from "lucide-react";
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
 import { requireStaff } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { adjustStockAction, createProductAction } from "./actions";
 
 type PageProps = { searchParams: Promise<{ error?: string; success?: string; q?: string }> };
@@ -28,23 +29,31 @@ export default async function InventoryPage({ searchParams }: PageProps) {
   const canManage = managerRoles.has(staff.role);
   const query = (params.q ?? "").trim().slice(0, 80);
 
-  const products = await prisma.product.findMany({
-    where: query ? {
-      isActive: true,
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        { sku: { contains: query, mode: "insensitive" } },
-        { category: { contains: query, mode: "insensitive" } },
-      ],
-    } : { isActive: true },
-    orderBy: [{ quantityOnHand: "asc" }, { name: "asc" }],
-    take: 200,
-    select: {
-      id: true, sku: true, name: true, category: true,
-      costPrice: true, sellingPrice: true, quantityOnHand: true,
-      reorderLevel: true, updatedAt: true,
-    },
-  });
+  const token = (await cookies()).get("otya_access_token")?.value;
+  const apiUrl = process.env.OMNIPOINT_CLOUDFLARE_API_URL;
+  if (!token || !apiUrl) redirect("/login?error=auth-not-configured");
+
+  type ProductRow = { id: string; sku: string; name: string; category: string | null; costPrice: number; sellingPrice: number; quantityOnHand: number; reorderLevel: number; updatedAt: string };
+  let products: ProductRow[] = [];
+  try {
+    const response = await fetch(new URL("/api/products", apiUrl), {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) redirect("/inventory?error=cloudflare-unavailable");
+    const body = await response.json() as { data?: ProductRow[] };
+    products = Array.isArray(body.data) ? body.data : [];
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect("/inventory?error=cloudflare-unavailable");
+  }
+  const normalizedQuery = query.toLocaleLowerCase();
+  products = products.filter((product) => !normalizedQuery ||
+    product.name.toLocaleLowerCase().includes(normalizedQuery) ||
+    product.sku.toLocaleLowerCase().includes(normalizedQuery) ||
+    (product.category ?? "").toLocaleLowerCase().includes(normalizedQuery));
+  products = products.sort((a, b) => a.quantityOnHand - b.quantityOnHand || a.name.localeCompare(b.name)).slice(0, 200);
 
   const lowStock = products.filter((product) => product.quantityOnHand <= product.reorderLevel).length;
   const stockUnits = products.reduce((sum, product) => sum + product.quantityOnHand, 0);
