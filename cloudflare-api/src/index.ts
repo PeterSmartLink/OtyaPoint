@@ -45,9 +45,9 @@ async function authenticate(request: Request, env: Env): Promise<Actor | Respons
   // Identity is linked by an explicitly provisioned subject, never by email alone.
   // Current role and active/verified status always come from authoritative D1.
   try {
-    const user = await env.DB.prepare("SELECT u.id,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
+    const user = await env.DB.prepare("SELECT u.id,u.email,u.displayName,u.agentId,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
       .bind("otya-auth", subject)
-      .first<{id:string;role:string;isActive:number;identityStatus:string}>();
+      .first<{id:string;email:string;displayName:string;agentId:string|null;role:string;isActive:number;identityStatus:string}>();
     if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
       return json({error:"staff_access_denied"},403);
     }
@@ -67,6 +67,12 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
   }
   const auth=await authenticate(request,env); if(isResponse(auth)) return auth;
   try {
+    if(request.method==="GET"&&url.pathname==="/api/me") {
+      // Actor.sub is the internal staff ID resolved from the verified Otya Auth subject.
+      const staff=await env.DB.prepare("SELECT id,email,displayName,agentId,role,isActive,identityStatus FROM User WHERE id=?1 LIMIT 1").bind(auth.sub).first<{id:string;email:string;displayName:string;agentId:string|null;role:Role;isActive:number;identityStatus:string}>();
+      if(!staff||staff.isActive!==1||staff.identityStatus!=="VERIFIED") return json({error:"staff_access_denied"},403);
+      return json({data:{id:staff.id,email:staff.email,displayName:staff.displayName,agentId:staff.agentId,role:staff.role},requestId});
+    }
     if(request.method==="GET"&&url.pathname==="/api/products") {
       const rows=await env.DB.prepare("SELECT id,sku,name,description,category,sellingPrice,quantityOnHand,reorderLevel,isActive FROM Product WHERE isActive=1 ORDER BY name LIMIT 200").all();
       return json({data:rows.results,requestId});
