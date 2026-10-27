@@ -74,7 +74,7 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       return json({data:{id:staff.id,email:staff.email,displayName:staff.displayName,agentId:staff.agentId,role:staff.role},requestId});
     }
     if(request.method==="GET"&&url.pathname==="/api/products") {
-      const rows=await env.DB.prepare("SELECT id,sku,name,description,category,sellingPrice,quantityOnHand,reorderLevel,isActive FROM Product WHERE isActive=1 ORDER BY name LIMIT 200").all();
+      const rows=await env.DB.prepare("SELECT id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel,isActive,updatedAt FROM Product WHERE isActive=1 ORDER BY quantityOnHand ASC,name LIMIT 200").all();
       return json({data:rows.results,requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/products") {
@@ -84,20 +84,54 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const name=typeof b.name==="string"?b.name.trim():"";
       const description=typeof b.description==="string"?b.description.trim():null;
       const category=typeof b.category==="string"?b.category.trim():null;
+      const openingStock=b.openingStock===undefined?0:b.openingStock;
+      const reorderLevel=b.reorderLevel===undefined?0:b.reorderLevel;
       if(!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(sku)||name.length<2||name.length>120||
          (description!==null&&description.length>1000)||(category!==null&&category.length>80)||
          !Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||
-         !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
+         !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0||
+         !Number.isSafeInteger(openingStock)||openingStock<0||openingStock>999999999||
+         !Number.isSafeInteger(reorderLevel)||reorderLevel<0||reorderLevel>999999999) return json({error:"invalid_product"},400);
 
       const id=crypto.randomUUID();
-      // D1 batch is used so the product and its audit event commit together or not at all.
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)")
-          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice),
+      const statements: D1Statement[]=[
+        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)")
+          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice,openingStock,reorderLevel),
         env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,afterState,requestId) VALUES (?1,?2,'CREATE','Product',?3,'Product created through Cloudflare API',?4,?5)")
-          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice}),requestId)
+          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice,openingStock,reorderLevel}),requestId)
+      ];
+      if(openingStock>0) statements.push(
+        env.DB.prepare("INSERT INTO StockMovement (id,productId,actorId,type,quantityDelta,quantityAfter,unitCost,referenceType,referenceId,reason) VALUES (?1,?2,?3,'OPENING',?4,?4,?5,'PRODUCT_OPENING',?2,'Opening stock recorded when product was created.')")
+          .bind(crypto.randomUUID(),id,auth.sub,openingStock,b.costPrice)
+      );
+      await env.DB.batch(statements);
+      return json({id,sku,name,openingStock,reorderLevel,requestId},201);
+    }
+    const stockAdjustmentMatch=url.pathname.match(/^\/api\/products\/([^/]+)\/stock-adjustments$/);
+    if(request.method==="POST"&&stockAdjustmentMatch) {
+      if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      let b:Record<string,unknown>;
+      try { b=await request.json() as Record<string,unknown>; } catch { return json({error:"invalid_json"},400); }
+      const productId=decodeURIComponent(stockAdjustmentMatch[1]);
+      const delta=b.quantityDelta, reason=typeof b.reason==="string"?b.reason.trim():"";
+      if(!productId||productId.length>80||!Number.isSafeInteger(delta)||delta===0||Math.abs(delta as number)>999999999||reason.length<4||reason.length>240) return json({error:"invalid_adjustment"},400);
+      const before=await env.DB.prepare("SELECT id,quantityOnHand,costPrice,isActive FROM Product WHERE id=?1 LIMIT 1").bind(productId).first<{id:string;quantityOnHand:number;costPrice:number;isActive:number}>();
+      if(!before||before.isActive!==1) return json({error:"product_not_found"},404);
+      if(before.quantityOnHand+(delta as number)<0) return json({error:"insufficient_stock"},409);
+      const after=before.quantityOnHand+(delta as number);
+      // Compare-and-set prevents two simultaneous adjustments overwriting one another.
+      // D1 batch is atomic; dependent inserts only run if the guarded UPDATE changed one row.
+      const results=await env.DB.batch([
+        env.DB.prepare("UPDATE Product SET quantityOnHand=quantityOnHand+?1,updatedAt=CURRENT_TIMESTAMP WHERE id=?2 AND isActive=1 AND quantityOnHand=?3 AND quantityOnHand+?1>=0")
+          .bind(delta,productId,before.quantityOnHand),
+        env.DB.prepare("INSERT INTO StockMovement (id,productId,actorId,type,quantityDelta,quantityAfter,unitCost,referenceType,referenceId,reason) SELECT ?1,?2,?3,'ADJUSTMENT',?4,quantityOnHand,?5,'MANUAL_ADJUSTMENT',?2,?6 FROM Product WHERE id=?2 AND quantityOnHand=?7 AND changes()=1")
+          .bind(crypto.randomUUID(),productId,auth.sub,delta,before.costPrice,reason,after),
+        env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,beforeState,afterState,requestId) SELECT ?1,?2,'UPDATE','PRODUCT_STOCK',?3,?4,?5,?6,?7 FROM Product WHERE id=?3 AND quantityOnHand=?8 AND changes()=1")
+          .bind(crypto.randomUUID(),auth.sub,productId,reason,JSON.stringify({quantityOnHand:before.quantityOnHand}),JSON.stringify({quantityOnHand:after,quantityDelta:delta}),requestId,after)
       ]);
-      return json({id,sku,name,requestId},201);
+      const updateMeta=(results[0] as {meta?:{changes?:number}}|undefined)?.meta;
+      if(updateMeta?.changes===0) return json({error:"stock_changed_retry"},409);
+      return json({data:{id:productId,quantityOnHand:after,quantityDelta:delta},requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
