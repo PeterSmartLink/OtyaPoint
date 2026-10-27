@@ -151,3 +151,45 @@ testRunner("fails closed when Auth verification times out", async () => {
   });
   assert.equal(response.status, 503);
 });
+
+
+testRunner("requires a manager role to create inventory products", async () => {
+  const db = mockDb({ id: "staff-1", role: "ATTENDANT", isActive: 1, identityStatus: "VERIFIED" });
+  let batchCalled = false;
+  db.batch = async () => { batchCalled = true; return []; };
+  const response = await worker.fetch(new Request("https://omnipoint.test/api/products", {
+    method: "POST",
+    headers: { authorization: "Bearer opaque-test-token", "content-type": "application/json" },
+    body: JSON.stringify({ sku: "SKU-01", name: "Charger", costPrice: 1000, sellingPrice: 1500, openingStock: 2, reorderLevel: 1 }),
+  }), {
+    DB: db,
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "otya-subject-1" }); } },
+  });
+  assert.equal(response.status, 403);
+  assert.equal(batchCalled, false);
+});
+
+testRunner("rejects decimal UGX values and invalid opening stock before writing", async () => {
+  const db = mockDb({ id: "staff-1", role: "MANAGER", isActive: 1, identityStatus: "VERIFIED" });
+  let batchCalled = false;
+  db.batch = async () => { batchCalled = true; return []; };
+  const response = await worker.fetch(new Request("https://omnipoint.test/api/products", {
+    method: "POST",
+    headers: { authorization: "Bearer opaque-test-token", "content-type": "application/json" },
+    body: JSON.stringify({ sku: "SKU-01", name: "Charger", costPrice: 1000.5, sellingPrice: 1500, openingStock: -2, reorderLevel: 1 }),
+  }), {
+    DB: db,
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "otya-subject-1" }); } },
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_product");
+  assert.equal(batchCalled, false);
+});
+
+testRunner("inventory API exposes Cloudflare D1 as the only inventory write path", async () => {
+  const source = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(source, /INSERT INTO StockMovement/);
+  assert.match(source, /INSERT INTO AuditEvent/);
+  assert.match(source, /stockAdjustmentMatch/);
+  assert.match(source, /quantityOnHand=quantityOnHand\+\?1/);
+});
