@@ -13,7 +13,7 @@ This contract defines how OmniPoint relates to Otya products without merging the
 - **Next (otya-next)** — owner assistant and approved automation interface. It can request scoped API operations but must not bypass OmniPoint authorization or directly write operational tables.
 - **Otya Player** — offline-first media app. Local media remains local by default; its core playback must not depend on OmniPoint or cloud availability.
 - **OtyaHub** — public product, documentation, policy and partner surfaces. Public content must not reveal private infrastructure, user records, or credentials.
-- **PeterSmart Link / Otya Hold / OmniPoint UG Limited** — business and product ownership labels, not database-sharing permissions. Each company, branch, till, and business activity needs explicit tenancy and role scope.
+- **Otya Hold Ltd (operating as Otya Hold Ltd T/A OmniPoint)** — business and product ownership labels, not database-sharing permissions. Each company, branch, till, and business activity needs explicit tenancy and role scope.
 
 ## Ownership rules
 
