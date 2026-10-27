@@ -11,7 +11,8 @@
     "db:validate": "prisma validate",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "check:worker": "tsc --noEmit -p cloudflare-api/tsconfig.json"
+    "check:worker": "tsc --noEmit -p cloudflare-api/tsconfig.json",
+    "check:inventory-fallback": "node scripts/check-inventory-fallback.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
