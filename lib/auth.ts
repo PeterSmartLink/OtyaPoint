@@ -22,5 +22,7 @@ export async function requireStaff() {
   }
 
   if (!staff || !staff.isActive || staff.identityStatus !== "VERIFIED") redirect("/login?error=staff-access");
-  return staff;
+  // Keep the authenticated provider subject distinct from the local profile ID.
+  // The Cloudflare Worker maps this subject to an active OmniPoint D1 membership.
+  return { ...staff, identitySubject: data.user.id };
 }
