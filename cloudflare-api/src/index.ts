@@ -13,6 +13,7 @@ export interface AuthServiceBinding { fetch(request: Request): Promise<Response>
 export interface Env { DB: D1Database; AUTH?: AuthServiceBinding }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Actor = { sub: string; idp: "otya-auth"; role: Role };
+const isRole = (value: string): value is Role => ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(value);
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 async function authenticate(request: Request, env: Env): Promise<Actor | Response> {
   const authorization = request.headers.get("authorization") || "";
