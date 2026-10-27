@@ -12,7 +12,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "test:worker-auth": "node --test cloudflare-api/tests/worker-auth.test.mjs",
-    "test:resend": "node --test cloudflare-api/tests/resend.test.mjs",
+    "test:notifications": "node --test cloudflare-api/tests/notifications.test.mjs",
     "test:worker": "node --test cloudflare-api/tests/*.test.mjs"
   },
   "dependencies": {
