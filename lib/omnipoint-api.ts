@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, randomUUID } from "node:crypto";
 
-type StaffForApi = { id: string; role: string };
+type StaffForApi = { id: string; role: string; identitySubject: string };
 type ApiResult<T = unknown> = { ok: true; status: number; body: T } | { ok: false; status: number; body: { error: string; message?: string } };
 
 function base64url(value: string | Buffer) {
@@ -46,7 +46,7 @@ export async function callOmniPointApi<T = unknown>(
 
   try {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${makeToken(staff.id, staff.role, secret)}`,
+      Authorization: `Bearer ${makeToken(staff.identitySubject, staff.role, secret)}`,
       Accept: "application/json",
       "X-Request-ID": randomUUID(),
     };
