@@ -9,39 +9,47 @@ interface D1Database {
   prepare(query: string): D1Statement;
   batch<T = unknown>(statements: D1Statement[]): Promise<T[]>;
 }
-export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
+export interface AuthServiceBinding { fetch(request: Request): Promise<Response> }
+export interface Env { DB: D1Database; AUTH?: AuthServiceBinding }
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Claims = { sub: string; idp: "supabase"; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
-type Actor = Claims & { role: Role };
+type Actor = { sub: string; idp: "otya-auth"; role: Role };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
-const decode = (s: string) => { const x=s.replace(/-/g,"+").replace(/_/g,"/"); return Uint8Array.from(atob(x+"=".repeat((4-x.length%4)%4)),c=>c.charCodeAt(0)); };
-const isRole = (role: unknown): role is Role => ["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"].includes(String(role));
-
 async function authenticate(request: Request, env: Env): Promise<Actor | Response> {
-  if (!env.AUTH_HMAC_SECRET) return json({ error: "auth_not_configured" }, 503);
-  const token=(request.headers.get("authorization")||"").replace(/^Bearer /,"");
-  const p=token.split(".");
-  if(p.length!==3) return json({error:"unauthorized"},401);
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  if (!token) return json({ error: "unauthorized" }, 401);
+  if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
 
-  let claims: Claims;
+  // Verify the Otya access token inside the trusted Cloudflare network.
+  // Never accept client-supplied identity/role claims or a static shared HMAC.
+  let subject: string;
   try {
-    const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.AUTH_HMAC_SECRET),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
-    if(!await crypto.subtle.verify("HMAC",key,decode(p[2]),new TextEncoder().encode(p[0]+"."+p[1]))) return json({error:"unauthorized"},401);
-    const c=JSON.parse(new TextDecoder().decode(decode(p[1]))) as Partial<Claims>;
-    if(typeof c.sub!=="string"||!c.sub||c.idp!=="supabase"||!Number.isFinite(c.exp)||Number(c.exp)<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api") return json({error:"unauthorized"},401);
-    claims = { sub:c.sub, idp:"supabase", exp:Number(c.exp), iss:"omnipoint", aud:"omnipoint-api" };
-  } catch { return json({error:"unauthorized"},401); }
+    const response = await env.AUTH.fetch(new Request("https://auth/auth/verify", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    }));
+    if (!response.ok) return json({ error: "unauthorized" }, 401);
+    const verified = await response.json() as { ok?: unknown; user_id?: unknown };
+    if (verified?.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
+      return json({ error: "unauthorized" }, 401);
+    }
+    subject = verified.user_id.trim();
+  } catch {
+    return json({ error: "auth_service_unavailable" }, 503);
+  }
 
-  // Never trust a role embedded in a token as the current authorization source.
-  // Resolve active staff status and role from the D1 profile on every request.
+  // Identity is linked by an explicitly provisioned subject, never by email alone.
+  // Current role and active/verified status always come from authoritative D1.
   try {
     const user = await env.DB.prepare("SELECT u.id,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
-      .bind(claims.idp,claims.sub)
+      .bind("otya-auth", subject)
       .first<{id:string;role:string;isActive:number;identityStatus:string}>();
     if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
       return json({error:"staff_access_denied"},403);
     }
-    return { ...claims, role:user.role };
+    return { sub:user.id, idp:"otya-auth", role:user.role };
   } catch {
     return json({error:"identity_lookup_unavailable"},503);
   }
