@@ -56,9 +56,9 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <Link href="/" style={styles.back}><ArrowLeft size={15} /> Back to dashboard</Link>
           <div style={styles.eyebrow}><Boxes size={15} /> OMNIPOINT · RETAIL OPERATIONS</div>
           <h1 style={styles.title}>Inventory workspace</h1>
-          <p style={styles.muted}>Live product records from OmniPoint&apos;s database, with auditable stock changes.</p>
+          <p style={styles.muted}>Product records from the currently configured legacy database. Cloudflare cutover is not yet verified; treat this as the legacy source until the API migration is approved.</p>
         </div>
-        <div style={styles.livePill}><span style={styles.dot} /> LIVE DATABASE</div>
+        <div style={styles.livePill}><span style={styles.dot} /> LEGACY DATABASE · CUTOVER UNVERIFIED</div>
       </header>
 
       <div style={styles.notice}>
@@ -124,7 +124,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         </div>
         <p style={styles.footnote}>Amounts are shown in UGX. This screen manages inventory records only; it does not create a retail sale or post a financial ledger entry.</p>
       </section>
-      <footer style={styles.footer}>OmniPoint UG Limited · Retail inventory · Access: {staff.role.replaceAll("_", " ")}</footer>
+      <footer style={styles.footer}>Otya Hold Ltd T/A OmniPoint · Retail inventory · Access: {staff.role.replaceAll("_", " ")}</footer>
     </main>
   );
 }
