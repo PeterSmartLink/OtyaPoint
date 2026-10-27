@@ -61,7 +61,7 @@ async function authenticate(request: Request, env: Env): Promise<Staff | Respons
     const jwtHeader = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[0]))) as { alg?: string; typ?: string };
     if (jwtHeader.alg !== "HS256" || jwtHeader.typ !== "JWT") return json({ error: "unauthorized" }, 401);
     const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-    const validSignature = await crypto.subtle.verify("HMAC", key, decodeBase64Url(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
+    const validSignature = await crypto.subtle.verify("HMAC", key, new Uint8Array(decodeBase64Url(parts[2])), new TextEncoder().encode(parts[0] + "." + parts[1]));
     if (!validSignature) return json({ error: "unauthorized" }, 401);
     const claims = JSON.parse(new TextDecoder().decode(decodeBase64Url(parts[1]))) as BridgeClaims;
     const now = Math.floor(Date.now() / 1000);
