@@ -99,3 +99,55 @@ testRunner("denies unknown roles even when identity is verified", async () => {
   });
   assert.equal(response.status, 403);
 });
+
+testRunner("denies inactive staff even with a valid Otya token", async () => {
+  const response = await worker.fetch(request(), {
+    DB: mockDb({ id: "staff-1", role: "MANAGER", isActive: 0, identityStatus: "VERIFIED" }),
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "otya-subject-1" }); } },
+  });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error, "staff_access_denied");
+});
+
+testRunner("denies unverified staff even with a valid Otya token", async () => {
+  const response = await worker.fetch(request(), {
+    DB: mockDb({ id: "staff-1", role: "MANAGER", isActive: 1, identityStatus: "PENDING" }),
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "otya-subject-1" }); } },
+  });
+  assert.equal(response.status, 403);
+});
+
+testRunner("rejects malformed successful Auth responses", async () => {
+  const response = await worker.fetch(request(), {
+    DB: mockDb(),
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: 17 }); } },
+  });
+  assert.equal(response.status, 401);
+});
+
+testRunner("fails closed on database identity lookup errors", async () => {
+  const db = mockDb();
+  db.prepare = (sql) => ({
+    bind() { return this; },
+    async first() {
+      if (sql.includes("AuthIdentity")) throw new Error("simulated D1 failure");
+      return { ok: 1 };
+    },
+    async all() { return { results: [] }; },
+    async run() { return {}; },
+  });
+  const response = await worker.fetch(request(), {
+    DB: db,
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "otya-subject-1" }); } },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "identity_lookup_unavailable");
+});
+
+testRunner("fails closed when Auth verification times out", async () => {
+  const response = await worker.fetch(request(), {
+    DB: mockDb(),
+    AUTH: { async fetch() { throw new DOMException("Timed out", "TimeoutError"); } },
+  });
+  assert.equal(response.status, 503);
+});
