@@ -1,31 +1,27 @@
-# Website ↔ Cloudflare API bridge
+# Legacy website ↔ Cloudflare API bridge — superseded
 
-This branch adds a same-origin Next.js route at `GET /api/bridge/products` and connects the Inventory view to it. The route reuses the website's existing Supabase-authenticated `requireStaff()` check, then creates a short-lived HS256 token server-side and forwards the request to the isolated Cloudflare Worker. The HMAC key is never sent to the browser.
+> **Status: historical implementation note only. Do not follow as a deployment runbook.** This document describes an earlier Next.js bridge that used Supabase Auth and Vercel preview environment variables. The owner-approved target is GitHub + Cloudflare only; Supabase, Vercel and Appwrite are not part of the target system.
 
-## Required server-side environment
+## Historical behavior
 
-Configure these only in an isolated preview environment until all checks pass:
+The earlier bridge added `GET /api/bridge/products` to a Next.js dashboard, reused the Supabase-authenticated `requireStaff()` guard, minted a short-lived HMAC token server-side and forwarded read-only product requests to an isolated Cloudflare Worker. That implementation is not the approved final architecture and must not be promoted as the final application.
 
-- `OMNIPOINT_CLOUDFLARE_API_URL`: base URL of the deployed **test** Worker, e.g. `https://<test-worker>.<your-subdomain>.workers.dev`.
-- `OMNIPOINT_API_HMAC_SECRET`: a newly generated high-entropy secret stored as a server-only Vercel environment variable.
-- Cloudflare Worker secret `AUTH_HMAC_SECRET`: the exact same secret value, configured with Wrangler secrets for the **test Worker only**.
+## Required replacement
 
-Do not use a `NEXT_PUBLIC_` variable for the secret. Do not set production values until the isolated integration is validated. Never commit secrets.
+- Serve the dashboard/API through the approved Cloudflare runtime.
+- Use the Otya Auth Worker through a verified Cloudflare Service Binding (or a separately reviewed authentication-verification contract).
+- Resolve the verified subject to an active OmniPoint staff record in D1 on every sensitive request. Never trust a role supplied by the browser.
+- Do not use a shared static HMAC secret as a shortcut for identity verification. The current OmniPoint Worker expects a token contract that does not match the current Otya Auth JWT contract; document and test the agreed contract before connecting them.
+- Keep D1 migration-test data isolated. Never treat test inventory as real shop stock or import it into production by assumption.
+- Keep sales posting, mobile-money/provider execution, ledger writes and reconciliation disabled until atomicity, authorization, idempotency, audit, reversal and reconciliation tests pass.
 
-## Important safety limits
+## Safety and acceptance gates
 
-- The Worker is not deployed by this change; no production URL or secret is assumed.
-- The bridge currently exposes read-only product listing only. Sales, mobile-money provider operations, ledger writes and reconciliation remain disabled.
-- Existing Supabase/PostgreSQL remains the source for login and staff profiles. The D1 test database is separate; its product records are test data and must not be treated as production inventory.
-- Before enabling writes, reconcile identity mapping: the current bridge passes the verified PostgreSQL staff ID in `sub`, while a migrated D1 `User` row with the same ID must exist for audit foreign keys. Role changes, staff deactivation, token revocation, secret rotation, and rate limits need dedicated tests.
-- Keep the UI clearly marked as test data until a read-only preview has been tested with authorized staff.
-- Do not switch production traffic, change production secrets, migrate real data, or disable Supabase as part of this spike.
+1. Review the current GitHub branch and its exact CI results.
+2. Validate the Otya Auth ↔ OmniPoint contract, including expiry, revocation, wrong issuer/audience, staff deactivation, role changes and auth-service outage.
+3. Run the UI against the isolated Cloudflare test Worker/D1 environment without exposing secrets to the browser.
+4. Confirm signed-out and unauthorized users are denied and errors do not disclose infrastructure details.
+5. Verify that the intended Worker and D1 binding are the test resources before any test deployment.
+6. Obtain explicit owner approval before any production deploy, DNS change, secret change, data migration or provider activation.
 
-## Validation checklist
-
-1. Confirm CI passes for the branch.
-2. Deploy the Worker to a separate test environment and apply the D1 migration there.
-3. Set the two Vercel variables only in Preview and set the matching Worker secret.
-4. Sign in as an active, verified staff member; open Inventory and confirm product rows come from the test D1 database.
-5. Confirm signed-out users receive 401, missing configuration fails closed, and Worker errors do not reveal secrets.
-6. Confirm all financial write routes remain blocked until transaction invariants, identity mapping, and provider integration are implemented and tested.
+No production traffic, DNS, secrets, database records or payment integrations are changed by this document.
