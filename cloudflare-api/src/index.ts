@@ -11,6 +11,22 @@ interface D1Database {
 }
 export interface AuthServiceBinding { fetch(request: Request): Promise<Response> }
 export interface Env { DB: D1Database; AUTH?: AuthServiceBinding }
+
+async function notifyLowStock(env: Env, notice: { productName: string; sku: string; quantityOnHand: number; reorderLevel: number }): Promise<void> {
+  if (!env.AUTH) return;
+  try {
+    const response = await env.AUTH.fetch(new Request('https://auth/internal/notifications/omnipoint/low-stock', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-otya-service': 'omnipoint' },
+      body: JSON.stringify(notice),
+      signal: AbortSignal.timeout(5000),
+    }));
+    if (!response.ok) console.warn('[omnipoint] low-stock notification not accepted');
+  } catch {
+    // Inventory operations must remain successful if the notification service is unavailable.
+    console.warn('[omnipoint] low-stock notification service unavailable');
+  }
+}
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
 type Actor = { sub: string; idp: "otya-auth"; role: Role };
 const isRole = (value: string): value is Role => ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(value);
@@ -105,6 +121,9 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
           .bind(crypto.randomUUID(),id,auth.sub,openingStock as number,b.costPrice)
       );
       await env.DB.batch(statements);
+      if (reorderLevel > 0 && (openingStock as number) <= (reorderLevel as number)) {
+        await notifyLowStock(env, { productName: name, sku, quantityOnHand: openingStock as number, reorderLevel: reorderLevel as number });
+      }
       return json({id,sku,name,openingStock,reorderLevel,requestId},201);
     }
     const stockAdjustmentMatch=url.pathname.match(/^\/api\/products\/([^/]+)\/stock-adjustments$/);
@@ -115,7 +134,7 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const productId=decodeURIComponent(stockAdjustmentMatch[1]);
       const delta=b.quantityDelta, reason=typeof b.reason==="string"?b.reason.trim():"";
       if(!productId||productId.length>80||!Number.isSafeInteger(delta)||delta===0||Math.abs(delta as number)>999999999||reason.length<4||reason.length>240) return json({error:"invalid_adjustment"},400);
-      const before=await env.DB.prepare("SELECT id,quantityOnHand,costPrice,isActive FROM Product WHERE id=?1 LIMIT 1").bind(productId).first<{id:string;quantityOnHand:number;costPrice:number;isActive:number}>();
+      const before=await env.DB.prepare("SELECT id,sku,name,quantityOnHand,reorderLevel,costPrice,isActive FROM Product WHERE id=?1 LIMIT 1").bind(productId).first<{id:string;sku:string;name:string;quantityOnHand:number;reorderLevel:number;costPrice:number;isActive:number}>();
       if(!before||before.isActive!==1) return json({error:"product_not_found"},404);
       if(before.quantityOnHand+(delta as number)<0) return json({error:"insufficient_stock"},409);
       const after=before.quantityOnHand+(delta as number);
@@ -131,6 +150,9 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       ]);
       const updateMeta=(results[0] as {meta?:{changes?:number}}|undefined)?.meta;
       if(updateMeta?.changes!==1) return json({error:"stock_changed_retry"},409);
+      if (before.reorderLevel > 0 && after <= before.reorderLevel) {
+        await notifyLowStock(env, { productName: before.name, sku: before.sku, quantityOnHand: after, reorderLevel: before.reorderLevel });
+      }
       return json({data:{id:productId,quantityOnHand:after,quantityDelta:delta},requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
