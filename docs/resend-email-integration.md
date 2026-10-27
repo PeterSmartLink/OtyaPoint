@@ -11,7 +11,7 @@ The connected Resend account currently lists:
 - An enabled webhook on https://petersmartlink.com/webhooks/ for email sent/delivered/delayed/complained/bounced/failed/suppressed events.
 - A separate legacy webhook targeting Appwrite is disabled and is not part of the target architecture.
 
-These are account observations, not proof that every Worker has the correct secret configured or that every notification path is live.
+A read-only check on 27 October 2026 also found the ten most recent transactional emails marked delivered, including Otya operations and backend abuse reports. This confirms existing Resend sending is active; it does not prove the new OmniPoint notification path is deployed or live. These are account observations, not proof that every Worker has the correct secret configured or that every notification path is live.
 
 ## Target architecture
 
