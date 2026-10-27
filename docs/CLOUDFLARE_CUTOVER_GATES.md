@@ -24,6 +24,9 @@ This is an implementation checklist, not authorization to deploy, migrate data, 
 
 ### 2. Establish the Cloudflare API contract
 
+- Otya Auth's documented contract includes `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, and `GET /auth/verify`. Use those existing identity endpoints rather than creating a second password store.
+- The existing Otya Server browser-session proxy uses HttpOnly, Secure cookies scoped to `.petersmartlink.com`. Do not assume those cookies are available to an OmniPoint site hosted on an unrelated hostname. Choose and test a same-origin server-side proxy/session bridge before wiring the dashboard; do not expose refresh tokens to browser JavaScript.
+
 - Define the frontend-facing API base URL and typed request/response contracts.
 - Keep the browser limited to the API; it must not connect directly to D1 or receive privileged credentials.
 - Use the existing Otya Auth verification service binding and local OmniPoint membership records. Never trust client-supplied roles.
