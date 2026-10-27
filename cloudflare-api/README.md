@@ -1,17 +1,18 @@
 # OmniPoint Cloudflare API spike
 
-An isolated Worker + D1 API scaffold for the OmniPoint migration. It is **not production-ready** and is not wired into the Next.js dashboard or the existing Supabase Auth session flow.
+An isolated Cloudflare Worker + D1 API scaffold for OmniPoint. It is **not production-ready** and is not yet wired into the owner/staff dashboard. The approved target is GitHub + Cloudflare only; Supabase, Vercel and Appwrite are excluded from the target architecture.
 
 ## Safety boundaries
 
 - Wrangler binds only to `omnipoint-migration-test`, an isolated D1 database.
 - `GET /health` is a read-only database health check.
-- Business routes require a signed short-lived HMAC bearer token. Without `AUTH_HMAC_SECRET`, they fail closed with `503 auth_not_configured`.
-- The token verification scaffold does not mint tokens, enroll staff, or provide revocation/key rotation. It resolves the verified upstream subject through the D1 `AuthIdentity` link table and then checks the current D1 staff profile. The trusted issuer, link provisioning, revocation/key rotation, and lifecycle are still not implemented. Do not deploy business routes until these are implemented and reviewed.
+- Business routes verify short-lived Otya Auth bearer tokens through the private Cloudflare service binding `AUTH` (`GET https://auth/auth/verify`). There is no shared HMAC secret in the OmniPoint Worker contract.
+- The verified Otya Auth subject must have an explicitly provisioned `AuthIdentity` row with provider `otya-auth`; the API then checks the current D1 staff profile and role on every request. No identity link is created by email matching.
+- The Worker binding and `0005_otya_auth_identity.sql` migration are code changes only. Apply the migration only to the isolated migration-test D1 until it is reviewed and tested. Do not connect live staff or deploy business routes until identity provisioning, token lifecycle, authorization and failure-mode tests pass.
 - Product reads and manager-only product creation are scaffolded. Sales posting, agency transactions, and reconciliation deliberately return `501` without recording anything until atomic financial behavior, provider adapters, and approval controls are implemented.
 - Savings-group routes cover group/member records, contribution receipt records, loan requests and approvals, and repayment receipt records. Contribution and repayment records stay `PENDING` until balanced ledger posting is implemented; loan disbursement returns `501`. These endpoints are a foundation, not a completed savings/credit accounting system.
 - The ordered D1 migrations live under `migration/d1`: core schema, explicit authentication identity links, then savings groups. Keep the test database isolated.
-- No real data was copied; this change does not deploy a Worker or alter DNS, Vercel, or Supabase.
+- No real data was copied; these changes do not deploy a Worker, alter DNS/secrets, migrate production data, or activate payment providers.
 
 ## Current route behavior
 
@@ -44,4 +45,4 @@ From the repository root, install Wrangler in a development environment and run:
 npx wrangler dev --config wrangler.toml
 ```
 
-Check `GET /health`. Set `AUTH_HMAC_SECRET` only as a Worker secret in the approved test environment; never commit it or place it in a `NEXT_PUBLIC_*` variable.
+Check `GET /health`. Configure the `AUTH` Service Binding in the isolated test Worker and confirm it targets the intended `otya-auth` Worker. Never place access tokens in source code or logs.
