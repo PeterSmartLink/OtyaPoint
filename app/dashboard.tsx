@@ -75,7 +75,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         </div>
         <div className="workspace-select">
           <div className="workspace-icon"><BriefcaseBusiness size={17}/></div>
-          <div className="workspace-copy"><strong>OmniPoint UG Ltd</strong><span>Mbiriizi · Main outlet</span></div>
+          <div className="workspace-copy"><strong>Otya Hold Ltd T/A OmniPoint</strong><span>Mbiriizi · Main outlet</span></div>
           <ChevronDown size={15} className="muted-icon"/>
         </div>
         <nav className="nav-groups">
@@ -109,7 +109,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
             <div className="metric-grid">
               <Metric icon={<ShoppingBag size={18}/>} label="Retail sales" value="UGX —" detail="No live sales recorded" tone="violet" />
               <Metric icon={<Wallet size={18}/>} label="Fintech commissions" value="UGX —" detail="Provider data not connected" tone="blue" />
-              <Metric icon={<Boxes size={18}/>} label="Inventory items" value="4 samples" detail="Demo catalogue only" tone="amber" />
+              <Metric icon={<Boxes size={18}/>} label="Inventory items" value="—" detail="Live shop inventory not connected" tone="amber" />
               <Metric icon={<Activity size={18}/>} label="Reconciliation" value="Not started" detail="Awaiting real ledger data" tone="green" />
             </div>
             <div className="dashboard-grid">
@@ -117,7 +117,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
               <div className="panel split-panel"><div className="panel-header"><div><h3>Ledger separation</h3><p>Two distinct financial records</p></div><ShieldCheck size={19} className="panel-title-icon"/></div><div className="ledger-tile retail-tile"><div className="ledger-tile-icon"><ShoppingBag size={17}/></div><div className="ledger-tile-copy"><strong>Retail ledger</strong><span>Sales · COGS · Tax metadata</span></div><span className="ledger-status">ISOLATED</span></div><div className="ledger-tile fintech-tile"><div className="ledger-tile-icon"><Smartphone size={17}/></div><div className="ledger-tile-copy"><strong>Fintech ledger</strong><span>Float · Cash-in/out · Commission</span></div><span className="ledger-status">ISOLATED</span></div><div className="audit-note"><ShieldCheck size={16}/><span>Privileged actions will require authorization and an audit record.</span></div></div>
             </div>
             <div className="bottom-grid">
-              <div className="panel inventory-panel"><div className="panel-header"><div><h3>Inventory watch</h3><p>Sample products that may need attention</p></div><Link href="/inventory" className="text-link">View inventory <ArrowUpRight size={14}/></Link></div><div className="product-list">{products.filter(p => p.stock <= 7).map(p => <div className="product-row" key={p.sku}><div className="product-icon"><Package size={17}/></div><div className="product-info"><strong>{p.name}</strong><span>{p.sku}</span></div><span className="stock-count">{p.stock} left</span><span className="status-low">Low stock</span></div>)}</div><div className="sample-caption">Sample catalogue · Not actual stock records</div></div>
+              <div className="panel inventory-panel"><div className="panel-header"><div><h3>Inventory watch</h3><p>Live shop stock status</p></div><Link href="/inventory" className="text-link">View inventory <ArrowUpRight size={14}/></Link></div><div className="product-list">{products.filter(p => p.stock <= 7).map(p => <div className="product-row" key={p.sku}><div className="product-icon"><Package size={17}/></div><div className="product-info"><strong>{p.name}</strong><span>{p.sku}</span></div><span className="stock-count">{p.stock} left</span><span className="status-low">Low stock</span></div>)}</div><div className="sample-caption">{products.length ? "Read-only isolated database · not live shop stock" : "No live inventory data available"}</div></div>
               <div className="panel quick-panel"><div className="panel-header"><div><h3>Quick actions</h3><p>Jump into a workflow</p></div></div><button className="quick-action" onClick={() => selectSection("Retail POS")}><div className="quick-icon violet-bg"><ShoppingBag size={17}/></div><span><strong>Open retail POS</strong><small>Start a retail sale workflow</small></span><ArrowUpRight size={16}/></button><button className="quick-action" onClick={() => selectSection("Fintech Agency")}><div className="quick-icon blue-bg"><Smartphone size={17}/></div><span><strong>Agency transaction</strong><small>Record a cash-in or cash-out</small></span><ArrowUpRight size={16}/></button><button className="quick-action" onClick={() => selectSection("Reconciliation")}><div className="quick-icon green-bg"><CircleDollarSign size={17}/></div><span><strong>Reconcile balances</strong><small>Review differences by ledger</small></span><ArrowUpRight size={16}/></button></div>
             </div>
           </> : <SectionView section={section} products={filteredProducts} query={query} setQuery={setQuery} serviceTab={serviceTab} setServiceTab={setServiceTab} amount={amount} setAmount={setAmount} inventorySource={inventorySource} onNotice={setNotice} />}
