@@ -10,9 +10,9 @@ This is an implementation checklist, not authorization to deploy, migrate data, 
 
 - `cloudflare-api/src/index.ts` contains a dedicated API scaffold with Otya Auth service-binding verification and local active-staff membership checks.
 - `wrangler.omnipoint.test.toml` points at the isolated `omnipoint-migration-test` D1 database. Keep this as a test-only configuration.
+- `wrangler.omnipoint.toml` exists and declares a dedicated `omnipoint-api` Worker bound to `omnipoint-prod`, private R2, cache, `omnipoint-jobs`, and the `otya-auth` service. Its existence is configuration only; it is not proof that the Worker has been deployed or verified.
 - The web application still depends on `@supabase/ssr`, `@supabase/supabase-js`, Supabase auth middleware/server helpers, and a Supabase admin client used by staff management.
-- The dedicated production Worker config is described in documentation but was not found at the expected repository path during the 2026-10-27 review. Verify current branch state before creating it.
-- Existing code and database schemas are not, by themselves, proof that the live dashboard is connected to production business records.
+- Existing code and database schemas are not, by themselves, proof that the live dashboard is connected to production business records. Read-only inspection on 2026-10-27 found the dedicated Worker was not present in the listed deployed Workers, and the checked core OmniPoint production business tables had zero rows.
 
 ## Required sequence
 
@@ -47,8 +47,7 @@ This is an implementation checklist, not authorization to deploy, migrate data, 
 
 ### 5. Prepare production configuration without activating it
 
-- Review a dedicated Worker config with bindings only for OmniPoint D1, private R2, cache, and its queue resources.
-- Verify resource identifiers and binding names by read-only inspection.
+- Review the existing production Worker bindings by read-only inspection; verify the configured resource identifiers and binding names against Cloudflare.
 - Do not add a custom domain, production secrets, deploy the Worker, or apply production migrations until the owner explicitly approves each relevant change.
 - Do not use the shared `otya-core` database as a shortcut for OmniPoint operational records.
 
