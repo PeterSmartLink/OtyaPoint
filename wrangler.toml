@@ -12,3 +12,9 @@ migrations_dir = "migration/d1"
 # This configuration intentionally points only at the isolated migration-test database.
 # Do not change the binding to production data until authentication, authorization,
 # financial invariants, and cutover checks have been approved and tested.
+
+# Internal service binding: validate Otya access tokens without exposing the Auth Worker.
+# This is a code/config change only; it does not deploy or alter Cloudflare resources.
+[[services]]
+binding = "AUTH"
+service = "otya-auth"
