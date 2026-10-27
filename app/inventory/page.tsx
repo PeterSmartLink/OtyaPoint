@@ -65,7 +65,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
       <header style={styles.header}>
         <div>
           <Link href="/" style={styles.back}><ArrowLeft size={15} /> Back to dashboard</Link>
-          <div style={styles.eyebrow}><Boxes size={15} /> OMNIPOINT · RETAIL OPERATIONS</div>
+          <div style={styles.eyebrow}><Boxes size={15} /> OTYA HOLD LTD T/A OMNIPOINT · RETAIL OPERATIONS</div>
           <h1 style={styles.title}>Inventory workspace</h1>
           <p style={styles.muted}>Live product records from Cloudflare D1, with auditable stock changes.</p>
         </div>
@@ -93,7 +93,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <label style={styles.label}>SKU / product code<input name="sku" required minLength={2} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,39}" placeholder="e.g. ACC-1042" style={styles.input} /></label>
           <label style={styles.label}>Category<input name="category" maxLength={80} placeholder="Accessories, phones, electronics…" style={styles.input} /></label>
           <label style={styles.label}>Cost price (UGX)<input name="costPrice" type="number" required min="0" max="999999999999" step="1" defaultValue="0" style={styles.input} /></label>
-          <label style={styles.label}>Selling price (UGX)<input name="sellingPrice" type="number" required min="0" max="999999999999" step="0.01" defaultValue="0" style={styles.input} /></label>
+          <label style={styles.label}>Selling price (UGX)<input name="sellingPrice" type="number" required min="0" max="999999999999" step="1" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Opening stock<input name="openingStock" type="number" required min="0" max="999999999" step="1" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Reorder alert level<input name="reorderLevel" type="number" required min="0" max="999999999" step="1" defaultValue="3" style={styles.input} /></label>
           <div style={styles.formAction}><button style={styles.primary} type="submit">Save product</button></div>
@@ -101,7 +101,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
       </section>}
 
       <section style={styles.card}>
-        <div style={styles.cardTitle}><ClipboardList size={19} /><div><h2>Product catalogue</h2><p>Up to 200 active products per view, ordered by stock attention.</p></div></div>
+        <div style={styles.cardTitle}><ClipboardList size={19} /><div><h2>Product catalogue</h2><p>Up to 200 active products per view, ordered by stock attention. Prices are whole UGX shillings.</p></div></div>
         <form method="get" style={styles.searchForm}>
           <input aria-label="Search products" name="q" defaultValue={query} maxLength={80} placeholder="Search product name, SKU, or category…" style={{ ...styles.input, flex: 1 }} />
           <button type="submit" style={styles.secondary}>Search</button>
