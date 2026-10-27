@@ -31,7 +31,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Test Cloudflare Worker auth and Resend email helpers
+      - name: Test Cloudflare Worker auth and notification integration
         run: npm run test:worker
       - name: Lint
         run: npm run lint
