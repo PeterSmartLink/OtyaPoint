@@ -1,6 +1,6 @@
 # OmniPoint
 
-**OmniPoint is the private operating system for one business: the owner's shop in Mbiriizi, Lwengo, Uganda.** It is not being built as a multi-tenant SaaS product.
+**Legal operator:** Otya Hold Ltd T/A OmniPoint. OmniPoint is the operating name for the owner's shop in Mbirizi, Lwengo District, Uganda—not a separate legal company and not a multi-tenant SaaS product. It is not being built as a multi-tenant SaaS product.
 
 ## What OmniPoint must do
 
