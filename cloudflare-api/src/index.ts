@@ -30,7 +30,8 @@ async function authenticate(request: Request, env: Env): Promise<Actor | Respons
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       signal: AbortSignal.timeout(8000),
     }));
-    if (!response.ok) return json({ error: "unauthorized" }, 401);
+    if (response.status === 401 || response.status === 403) return json({ error: "unauthorized" }, 401);
+    if (!response.ok) return json({ error: "auth_service_unavailable" }, 503);
     const verified = await response.json() as { ok?: unknown; user_id?: unknown };
     if (verified?.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
       return json({ error: "unauthorized" }, 401);
