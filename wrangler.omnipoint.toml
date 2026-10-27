@@ -38,5 +38,7 @@ queue = "omnipoint-jobs"
 
 
 # Set this as a Worker secret with `wrangler secret put OMNIPOINT_API_HMAC_SECRET`.
-# Use the same high-entropy value in the server-only Vercel environment variable.
+# The matching signing secret belongs only in the server-side web runtime's secret store.
+# Cloudflare is the target runtime; Vercel is not an approved production dependency.
 # Never place the secret in this file or any NEXT_PUBLIC_ variable.
+# Do not activate until the web runtime has an approved private path to this Worker.
