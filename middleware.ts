@@ -1,42 +1,19 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anonKey) {
-    if (request.nextUrl.pathname === "/login") return response;
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("error", "auth-not-configured");
-    return NextResponse.redirect(loginUrl);
-  }
-
-  const supabase = createServerClient(url, anonKey, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-      },
-    },
-  });
-
-  const { data: { user } } = await supabase.auth.getUser();
+export function middleware(request: NextRequest) {
   const isLogin = request.nextUrl.pathname === "/login";
-  if (!user && !isLogin) {
+  const hasSession = Boolean(request.cookies.get("otya_access_token")?.value);
+
+  if (!hasSession && !isLogin) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Keep /login reachable for authenticated users; server-side staff checks
-  // prevent redirect loops for accounts without an active staff profile.
-  return response;
+  // Cookie presence only gates navigation; every protected server operation
+  // independently validates the token and staff status against Cloudflare.
+  return NextResponse.next();
 }
 
 export const config = {
