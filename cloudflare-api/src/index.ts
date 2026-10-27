@@ -78,8 +78,21 @@ const can=(c:Actor,roles:Role[])=>roles.includes(c.role);
 export default { async fetch(request:Request,env:Env):Promise<Response> {
   const url=new URL(request.url), requestId=request.headers.get("cf-ray")||crypto.randomUUID();
   if(request.method==="GET"&&url.pathname==="/health") {
-    try { const x=await env.DB.prepare("SELECT 1 AS ok").first<{ok:number}>(); return json({service:"omnipoint-migration-api",status:x?.ok===1?"ok":"degraded"}); }
-    catch { return json({service:"omnipoint-migration-api",status:"database_unavailable"},503); }
+    // Readiness must prove the core schema is present, not merely that D1 answers SELECT 1.
+    const requiredTables = ["User", "AuthIdentity", "Product", "StockMovement", "AuditEvent"];
+    try {
+      const result = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?1,?2,?3,?4,?5)"
+      ).bind(...requiredTables).all<{name:string}>();
+      const present = new Set(result.results.map((row) => row.name));
+      const missing = requiredTables.filter((name) => !present.has(name));
+      if (missing.length) {
+        return json({service:"omnipoint-migration-api",status:"schema_incomplete",missingTables:missing},503);
+      }
+      return json({service:"omnipoint-migration-api",status:"ready"});
+    } catch {
+      return json({service:"omnipoint-migration-api",status:"database_unavailable"},503);
+    }
   }
   const auth=await authenticate(request,env); if(isResponse(auth)) return auth;
   try {
