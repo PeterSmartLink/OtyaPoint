@@ -21,7 +21,7 @@ Do not put access or refresh tokens in public `NEXT_PUBLIC_*` variables. The log
 
 ## Not yet production-ready
 
-- Refresh-token renewal and a user-facing logout/revocation flow still need implementation and tests. The current access cookie expires after 15 minutes, so a user may need to sign in again.
+- Same-origin `POST /api/auth/refresh` now refreshes the access cookie using the HttpOnly refresh cookie; the dashboard sign-out control calls `POST /api/auth/logout`, which attempts server-side refresh-token revocation and clears browser cookies even if Auth is unavailable. These routes still need dedicated automated tests and end-to-end browser verification. The refresh token is not rotated by the current Auth Worker contract.
 - An Otya Auth account is not automatically an OmniPoint staff account. A privileged administrator must explicitly provision and verify the D1 staff identity link.
 - Existing inventory, management and operational actions still include legacy Prisma/PostgreSQL assumptions. This checkpoint does not claim that all dashboard routes have been migrated to D1.
 - Sales posting, agency-provider transactions and reconciliation remain disabled. No live payment was called and no sale was recorded.
@@ -29,4 +29,4 @@ Do not put access or refresh tokens in public `NEXT_PUBLIC_*` variables. The log
 
 ## Verification
 
-Run the repository's `npm run test:worker-auth`, `npm run lint` and `npm run build` checks. Review the current GitHub Actions result for the exact branch head before treating this checkpoint as validated.
+Run the repository's `npm run test:worker-auth`, `npm run lint` and `npm run build` checks, plus dedicated refresh/logout route tests. Review the current GitHub Actions result for the exact branch head before treating this checkpoint as validated.
