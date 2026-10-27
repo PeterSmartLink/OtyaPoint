@@ -84,25 +84,25 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const name=typeof b.name==="string"?b.name.trim():"";
       const description=typeof b.description==="string"?b.description.trim():null;
       const category=typeof b.category==="string"?b.category.trim():null;
-      const openingStock=b.openingStock===undefined?0:b.openingStock;
-      const reorderLevel=b.reorderLevel===undefined?0:b.reorderLevel;
+      const openingStock: unknown=b.openingStock===undefined?0:b.openingStock;
+      const reorderLevel: unknown=b.reorderLevel===undefined?0:b.reorderLevel;
       if(!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(sku)||name.length<2||name.length>120||
          (description!==null&&description.length>1000)||(category!==null&&category.length>80)||
          !Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||
          !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0||
-         !Number.isSafeInteger(openingStock)||openingStock<0||openingStock>999999999||
-         !Number.isSafeInteger(reorderLevel)||reorderLevel<0||reorderLevel>999999999) return json({error:"invalid_product"},400);
+         typeof openingStock!=="number"||!Number.isSafeInteger(openingStock)||openingStock<0||openingStock>999999999||
+         typeof reorderLevel!=="number"||!Number.isSafeInteger(reorderLevel)||reorderLevel<0||reorderLevel>999999999) return json({error:"invalid_product"},400);
 
       const id=crypto.randomUUID();
       const statements: D1Statement[]=[
         env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)")
-          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice,openingStock,reorderLevel),
+          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice,openingStock as number,reorderLevel as number),
         env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,afterState,requestId) VALUES (?1,?2,'CREATE','Product',?3,'Product created through Cloudflare API',?4,?5)")
           .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice,openingStock,reorderLevel}),requestId)
       ];
       if(openingStock>0) statements.push(
         env.DB.prepare("INSERT INTO StockMovement (id,productId,actorId,type,quantityDelta,quantityAfter,unitCost,referenceType,referenceId,reason) VALUES (?1,?2,?3,'OPENING',?4,?4,?5,'PRODUCT_OPENING',?2,'Opening stock recorded when product was created.')")
-          .bind(crypto.randomUUID(),id,auth.sub,openingStock,b.costPrice)
+          .bind(crypto.randomUUID(),id,auth.sub,openingStock as number,b.costPrice)
       );
       await env.DB.batch(statements);
       return json({id,sku,name,openingStock,reorderLevel,requestId},201);
