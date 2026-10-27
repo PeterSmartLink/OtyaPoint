@@ -54,3 +54,24 @@ This change has no live effect unless someone later deploys the configuration. I
 ## Explicit non-actions
 
 This audit did not write to either D1 database, read business/customer rows, inspect secret values, modify deployed bindings, deploy a Worker, attach domains, execute a provider transaction, or migrate production data. The production config edit exists only on this review branch. A successful Vercel deployment or Worker health response must not be treated as proof of financial or production readiness.
+
+## Follow-up live read-only verification — 2026-10-27
+
+This follow-up was performed with Cloudflare D1 SQL queries that only read SQLite metadata and aggregate row counts. Every query returned `changed_db: false` and `rows_written: 0`.
+
+### Confirmed production state
+
+- `omnipoint-prod` is reachable and contains the expected OmniPoint-prefixed tables and stock triggers. The prior dashboard metadata value `num_tables: 0` must not be used as proof that the database has no schema.
+- The live production `sqlite_master` query returned 10 application tables plus 4 triggers (indexes are additional schema objects).
+- Core production tables currently have **zero rows**: `omni_products`, `omni_staff_memberships`, `omni_retail_sales`, `omni_ledger_entries`, and `omni_stock_movements`. This confirms the database is provisioned but does **not** contain usable shop inventory, staff membership, sales, ledger or stock-movement records at the time of this check. Do not seed sample data or claim production business data is already available.
+- Production `omni_staff_memberships` has `company_id` and `branch_id`, but is missing the profile fields `display_name`, `email`, and `agent_id` expected by the newer API contract.
+- Production `omni_products`, `omni_retail_sales`, `omni_stock_movements`, `omni_agency_transactions`, `omni_ledger_entries`, `omni_reconciliation_sessions`, and `omni_audit_events` do not currently have `company_id` columns. The API must remain unavailable for writes until the approved company-scope migration has been validated and applied through a reconciled migration process.
+- Production `omni_ledger_entries` has no `journal_id` column, and no `omni_ledger_journals` table was found. Aggregate double-entry balancing and posted-journal immutability are therefore not yet enforced by the production database.
+- The isolated migration-test database contains both legacy Prisma-style tables and the newer OmniPoint-prefixed schema. It must not be treated as a production backup or as proof that the production migration sequence is correct.
+
+### Release decision
+
+**Do not connect customer-facing writes or enable sales/payment workflows against this production database yet.** The safe next step is a reviewed migration rehearsal against a fresh isolated D1 database created from the exact current migration files, then a comparison of that result to the production schema. Resolve migration ordering and idempotency, company-scoping, journal constraints, and staff identity fields in code and tests first. A production migration, seed/import of real shop records, Worker deployment, or payment activation remains separately gated by explicit approval.
+
+This follow-up did not retrieve individual business rows, customer data or secret values and did not write to either D1 database.
+
