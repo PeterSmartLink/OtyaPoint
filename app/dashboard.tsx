@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Activity, ArrowDownLeft, ArrowUpRight, Bell, Boxes, BriefcaseBusiness,
   CheckCircle2, ChevronDown, CircleDollarSign, Command,
-  Download, LayoutDashboard, LifeBuoy, Menu, Moon, MoreHorizontal,
+  Download, LayoutDashboard, LifeBuoy, LogOut, Menu, Moon, MoreHorizontal,
   Package, Plus, Search, Settings2, ShieldCheck, ShoppingBag,
   Smartphone, Sun, Wallet, X
 } from "lucide-react";
@@ -88,7 +88,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         <div className="sidebar-bottom">
           <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Demo-only; no live payments.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
           <button className="nav-item support-link" onClick={() => setNotice("Support centre is a prototype placeholder. Connect a support channel before launch.")}><LifeBuoy size={18}/><span>Help & support</span></button>
-          <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
+          <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await fetch("/api/auth/logout", { method: "POST", cache: "no-store" }); window.location.assign("/login"); }}><LogOut size={17}/></button></div>
         </div>
       </aside>
 
