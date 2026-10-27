@@ -10,7 +10,7 @@ const compiled = ts.transpileModule(source, {
 const workerModule = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 const worker = workerModule.default;
 
-function mockDb(user = null) {
+function mockDb(user = null, schemaTables = ["User", "AuthIdentity", "Product", "StockMovement", "AuditEvent"]) {
   return {
     prepare(sql) {
       return {
@@ -22,7 +22,10 @@ function mockDb(user = null) {
           if (sql.includes("FROM AuthIdentity ai JOIN User u")) return user;
           return null;
         },
-        async all() { return { results: [] }; },
+        async all() {
+          if (sql.includes("sqlite_master")) return { results: schemaTables.map((name) => ({ name })) };
+          return { results: [] };
+        },
         async run() { return {}; },
       };
     },
@@ -35,6 +38,25 @@ function request(path = "/api/products", token = "opaque-test-token") {
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
 }
+
+
+testRunner("health readiness requires the core D1 schema", async () => {
+  const response = await worker.fetch(new Request("https://omnipoint.test/health"), {
+    DB: mockDb(null, ["User", "Product"]),
+  });
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.status, "schema_incomplete");
+  assert.deepEqual(body.missingTables, ["AuthIdentity", "StockMovement", "AuditEvent"]);
+});
+
+testRunner("health readiness reports ready only when core D1 tables exist", async () => {
+  const response = await worker.fetch(new Request("https://omnipoint.test/health"), {
+    DB: mockDb(),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, "ready");
+});
 
 testRunner("rejects missing bearer token without calling Auth", async () => {
   let called = false;
