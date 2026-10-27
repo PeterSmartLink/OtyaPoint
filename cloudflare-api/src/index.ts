@@ -16,7 +16,7 @@ type Actor = { sub: string; idp: "otya-auth"; role: Role };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 async function authenticate(request: Request, env: Env): Promise<Actor | Response> {
   const authorization = request.headers.get("authorization") || "";
-  const match = authorization.match(/^Bearer\\s+(.+)$/i);
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1]?.trim();
   if (!token) return json({ error: "unauthorized" }, 401);
   if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
