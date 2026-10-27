@@ -7,8 +7,8 @@ const source = await readFile(new URL("../src/resend.ts", import.meta.url), "utf
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const module = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
-const { sendTransactionalEmail } = module;
+const loadedModule = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { sendTransactionalEmail } = loadedModule;
 
 test("email helper fails closed when Resend configuration is absent", async () => {
   assert.deepEqual(await sendTransactionalEmail({}, { to: "owner@example.com", subject: "Alert", text: "Hello" }), { ok: false, reason: "not_configured" });
