@@ -68,12 +68,13 @@ async function authenticate(request: Request, env: Env): Promise<Staff | Respons
     if (typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 256 ||
         typeof claims.exp !== "number" || !Number.isSafeInteger(claims.exp) || claims.exp <= now ||
         typeof claims.iat !== "number" || !Number.isSafeInteger(claims.iat) || claims.iat > now + 30 ||
-        claims.exp - now > 600 || claims.iss !== "omnipoint" || claims.aud !== "omnipoint-api") {
+        claims.exp <= claims.iat || claims.exp - claims.iat > 600 || claims.exp - now > 600 ||
+        claims.iss !== "omnipoint" || claims.aud !== "omnipoint-api") {
       return json({ error: "unauthorized" }, 401);
     }
     // The token identifies the caller only. Authorization comes from the D1 staff record.
     const staff = await env.DB.prepare(
-      "SELECT id, identity_subject, company_id, branch_id, role, status FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
+      "SELECT id, identity_subject, company_id, branch_id, role, status, display_name, email, agent_id FROM omni_staff_memberships WHERE identity_subject = ?1 LIMIT 1"
     ).bind(claims.sub).first<Staff>();
     if (!staff || staff.status !== "ACTIVE" || !isRole(staff.role)) return json({ error: "staff_access_denied" }, 403);
     return staff;
@@ -89,10 +90,17 @@ async function audit(env: Env, actor: string, action: string, entityType: string
 function requestId(request: Request) { return request.headers.get("cf-ray") || uuid(); }
 async function parseBody(request: Request): Promise<Record<string, unknown> | Response> {
   if (!(request.headers.get("content-type") || "").toLowerCase().includes("application/json")) return json({ error: "content_type_must_be_json" }, 415);
-  const length = Number(request.headers.get("content-length") || "0");
-  if (length > 64 * 1024) return json({ error: "request_too_large" }, 413);
+  const lengthHeader = request.headers.get("content-length");
+  if (lengthHeader !== null) {
+    const length = Number(lengthHeader);
+    if (!Number.isSafeInteger(length) || length < 0) return json({ error: "invalid_content_length" }, 400);
+    if (length > 64 * 1024) return json({ error: "request_too_large" }, 413);
+  }
   try {
-    const body = await request.json();
+    // Content-Length is optional and may be absent on streamed requests; enforce the limit on actual bytes too.
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > 64 * 1024) return json({ error: "request_too_large" }, 413);
+    const body: unknown = JSON.parse(raw);
     if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "invalid_body" }, 400);
     return body as Record<string, unknown>;
   } catch { return json({ error: "invalid_json" }, 400); }
