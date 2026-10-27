@@ -61,6 +61,8 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Check inventory source truth and sample fallback
+        run: npm run check:inventory-fallback
       - name: Validate Prisma schema
         run: npm run db:validate
       - name: Type-check Cloudflare Worker
