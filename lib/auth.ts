@@ -2,6 +2,10 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { UserRole } from "@prisma/client";
+
+const STAFF_ROLES = new Set<UserRole>(["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"]);
+const isUserRole = (value: string): value is UserRole => STAFF_ROLES.has(value as UserRole);
 
 const ACCESS_COOKIE = "otya_access_token";
 
@@ -22,7 +26,7 @@ export async function requireStaff() {
     const body = await response.json() as { data?: { id?: unknown; email?: unknown; displayName?: unknown; agentId?: unknown; role?: unknown } };
     const staff = body.data;
     if (!staff || typeof staff.id !== "string" || typeof staff.email !== "string" ||
-        typeof staff.displayName !== "string" || typeof staff.role !== "string") {
+        typeof staff.displayName !== "string" || typeof staff.role !== "string" || !isUserRole(staff.role)) {
       redirect("/login?error=staff-lookup-unavailable");
     }
     return {
