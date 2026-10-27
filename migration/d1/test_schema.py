@@ -35,11 +35,26 @@ def main():
             ("identity-1", "supabase", "synthetic-auth-subject-1", "u1"),
         )
 
-        # Duplicate upstream subject must not link to another profile.
+        # Otya Auth uses the same explicit subject-link table but a distinct provider namespace.
+        db.execute(
+            "INSERT INTO AuthIdentity(id,provider,authSubject,userId) VALUES (?,?,?,?)",
+            ("identity-otya-1", "otya-auth", "otya-user-subject-1", "u1"),
+        )
+        db.execute(
+            "INSERT INTO User(id,email,displayName,role,isActive,identityStatus) VALUES (?,?,?,?,?,?)",
+            ("u2", "attendant@example.invalid", "Test Attendant", "ATTENDANT", 1, "VERIFIED"),
+        )
+
+        # A verified upstream subject cannot be linked to two staff profiles.
         expect_integrity_error(
             db,
             "INSERT INTO AuthIdentity(id,provider,authSubject,userId) VALUES (?,?,?,?)",
-            ("identity-2", "supabase", "synthetic-auth-subject-1", "u1"),
+            ("identity-otya-2", "otya-auth", "otya-user-subject-1", "u2"),
+        )
+        # The same upstream subject string in a different provider namespace remains separate.
+        db.execute(
+            "INSERT INTO AuthIdentity(id,provider,authSubject,userId) VALUES (?,?,?,?)",
+            ("identity-supabase-2", "supabase", "otya-user-subject-1", "u2"),
         )
 
         db.execute(
@@ -84,12 +99,12 @@ def main():
         assert debit == credit == 150000, (debit, credit)
 
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 1
-        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM User").fetchone()[0] == 2
+        assert db.execute("SELECT COUNT(*) FROM AuthIdentity").fetchone()[0] == 3
         assert db.execute("SELECT COUNT(*) FROM Product").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM AgencyTransaction").fetchone()[0] == 1
         db.close()
-    print("PASS: ordered D1 migrations, auth identity linking, schema constraints, FK checks, idempotency uniqueness, and synthetic balanced-ledger fixture")
+    print("PASS: ordered D1 migrations, Otya/Supabase identity linking, schema constraints, FK checks, idempotency uniqueness, and synthetic balanced-ledger fixture")
 
 
 if __name__ == "__main__":
