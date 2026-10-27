@@ -19,7 +19,7 @@ The dedicated Cloudflare D1 database, private R2 buckets, KV namespace and queue
 - **Provider truth:** an agency transaction is not successful until a verified provider response/status confirms it. Provider execution remains disabled until partner contracts, credentials, callbacks, reconciliation and compliance controls are implemented.
 - **Offline-friendly counter:** the staff interface should be touch-friendly and handle poor connectivity without pretending that an unconfirmed transaction succeeded.
 
-See [the ecosystem contract](docs/ECOSYSTEM_CONTRACT.md), [the Cloudflare inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md), and [the implementation gates](docs/OMNIPOINT_BUILD_GATES.md).
+See [the ecosystem contract](docs/ECOSYSTEM_CONTRACT.md), [the Cloudflare inventory](docs/CLOUDFLARE_RESOURCE_INVENTORY.md), and [the implementation gates](docs/OMNIPOINT_BUILD_GATES.md). The ecosystem-wide naming and repository standard is maintained in [Otya Server](https://github.com/PeterSmartLink/Otya-Server/blob/chore/python-first-ecosystem-plan/docs/ECOSYSTEM_NAMING_AND_REPOSITORY_STANDARD.md).
 
 ## Development
 
