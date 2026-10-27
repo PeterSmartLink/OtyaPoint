@@ -1,30 +1,38 @@
-# Resend email integration
+# Resend across the Otya ecosystem
 
-Resend is the approved outbound transactional email provider for the Otya ecosystem, including OmniPoint. It complements (not replaces) Cloudflare Workers, D1, R2, Queues, and GitHub Actions. Do not add Supabase, Appwrite, or Vercel for email delivery.
+Resend is the shared transactional email provider for Otya Hold Ltd services, including Otya Server, Otya accounts, Otya Media-related account/security messages, and OmniPoint operations. Keep one provider integration and one verified sending domain rather than creating disconnected email services per app.
 
-## Architecture
+## Existing account verified directly
 
-- Application/business state remains in Cloudflare D1.
-- Cloudflare Worker code calls Resend's HTTPS API for transactional delivery.
-- Never send email from the browser or expose the Resend API key to clients.
-- Do not send mail inside a D1 transaction. Commit business state first, then enqueue or attempt notification separately; email delivery failure must not undo a completed business operation.
-- For durable/high-volume delivery, use a Cloudflare Queue with retries and an idempotency key. Do not claim delivery merely because a request was accepted by the API.
-- Keep email events auditable without logging API keys, access tokens, full message bodies, or unnecessary personal information.
+The connected Resend account currently lists:
+- Verified sending domain: petersmartlink.com; sending is enabled.
+- Existing API keys include Auth Send Email and otya-store-worker.
+- Six published Otya templates for welcome, verification, password reset, security alerts, service notices, and updates.
+- An enabled webhook on https://petersmartlink.com/webhooks/ for email sent/delivered/delayed/complained/bounced/failed/suppressed events.
+- A separate legacy webhook targeting Appwrite is disabled and is not part of the target architecture.
 
-## Configuration
+These are account observations, not proof that every Worker has the correct secret configured or that every notification path is live.
 
-Set these on the relevant Cloudflare Worker only after the sender domain and recipient policy are approved:
+## Target architecture
 
-- Secret: `RESEND_API_KEY` — add through Cloudflare Worker secret management, never commit it.
-- Variable: `RESEND_FROM_EMAIL` — a sender on a domain verified in Resend.
-- Optional variable: `RESEND_REPLY_TO` — an approved monitored reply address.
+- Resend account: one source for sending domain, shared templates, provider delivery status, and delivery webhooks.
+- Otya Server / otya-auth: central server-side Resend transport. It owns the Resend API key and uses the existing verified domain.
+- OmniPoint Worker: sends a narrowly scoped low-stock event over its Cloudflare Service Binding to Otya Server. It does not receive the Resend API key and cannot choose arbitrary recipients.
+- Recipients: low-stock notices go only to the operator addresses configured in ADMIN_EMAILS on the central Otya Auth Worker.
+- State: product and stock truth stays in Cloudflare D1. Notification failures must never undo a completed inventory write.
+- Duplicate suppression: the central service suppresses repeated low-stock messages for the same SKU for 24 hours.
+- Future events: receipts, staff/security alerts, service notices, and approved operational reports should reuse this central service and reviewed event-specific templates. Add durable Cloudflare Queue delivery/retries before treating notifications as guaranteed.
 
-No credentials are stored in this repository. Do not use a real sender or send test messages until the domain, sender, recipient, and cost/limits are confirmed. No Cloudflare resources or secrets were changed by adding this integration code.
+## Low-stock route
 
-## Supported code contract
+The internal service-binding route is POST /internal/notifications/omnipoint/low-stock.
 
-`cloudflare-api/src/resend.ts` exports a small server-side helper. It validates basic message fields, uses a bounded timeout, sends only through `https://api.resend.com/emails`, never logs message content or secrets, and returns a typed result. Callers should use reviewed templates and recipient allowlists for operational alerts, password/reset workflows, receipts, and staff notifications. Do not expose a general-purpose arbitrary-email endpoint to unauthenticated clients.
+It accepts only product name, SKU, quantity on hand, and reorder threshold. It rejects invalid values, only sends when quantity is at/below the positive reorder threshold, takes recipients from server configuration, and returns no provider error details. The route is intended for service-binding calls, not a public arbitrary-email API.
 
-## Readiness boundary
+## Safety and rollout
 
-The helper is code-only until a verified sender and Cloudflare Worker secret/configuration are set. Email is not considered live, and no messages have been sent by this change. Production secret configuration and deployment require separate approval.
+- The code changes in the related pull requests are not deployed.
+- No Resend API key was created, rotated, exposed, or copied into OmniPoint.
+- No Cloudflare secret, DNS record, production Worker, or live customer email was changed by this code work.
+- Deployment should be staged: first verify the existing RESEND_API_KEY secret on Otya Auth without reading or exposing its value; then deploy the central handler; then deploy the OmniPoint caller; finally send a test only to an explicitly approved operator address.
+- The Resend webhook currently points to the existing Otya site. Keep it intact until the receiver is audited; do not point it at a new endpoint without a separate reviewed change.
