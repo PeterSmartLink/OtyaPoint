@@ -17,6 +17,8 @@ const errors: Record<string, string> = {
   "insufficient-stock": "This adjustment would make stock negative. No change was saved.",
   "product-not-found": "That product is unavailable or inactive.",
   "adjustment-failed": "The stock adjustment could not be completed. Refresh the page and try again.",
+  "cloudflare-unavailable": "Cloudflare inventory is unavailable. No change was saved; check API configuration and retry.",
+  "stock-changed-retry": "Another stock update happened at the same time. Refresh the page and retry.",
 };
 const successes: Record<string, string> = {
   "product-created": "Product created. The opening stock and audit history were recorded together.",
@@ -65,9 +67,9 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <Link href="/" style={styles.back}><ArrowLeft size={15} /> Back to dashboard</Link>
           <div style={styles.eyebrow}><Boxes size={15} /> OMNIPOINT · RETAIL OPERATIONS</div>
           <h1 style={styles.title}>Inventory workspace</h1>
-          <p style={styles.muted}>Live product records from OmniPoint&apos;s database, with auditable stock changes.</p>
+          <p style={styles.muted}>Live product records from Cloudflare D1, with auditable stock changes.</p>
         </div>
-        <div style={styles.livePill}><span style={styles.dot} /> LIVE DATABASE</div>
+        <div style={styles.livePill}><span style={styles.dot} /> CLOUDFLARE D1</div>
       </header>
 
       <div style={styles.notice}>
@@ -90,7 +92,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
           <label style={styles.label}>Product name<input name="name" required minLength={2} maxLength={120} placeholder="e.g. USB-C fast charger" style={styles.input} /></label>
           <label style={styles.label}>SKU / product code<input name="sku" required minLength={2} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,39}" placeholder="e.g. ACC-1042" style={styles.input} /></label>
           <label style={styles.label}>Category<input name="category" maxLength={80} placeholder="Accessories, phones, electronics…" style={styles.input} /></label>
-          <label style={styles.label}>Cost price (UGX)<input name="costPrice" type="number" required min="0" max="999999999999" step="0.01" defaultValue="0" style={styles.input} /></label>
+          <label style={styles.label}>Cost price (UGX)<input name="costPrice" type="number" required min="0" max="999999999999" step="1" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Selling price (UGX)<input name="sellingPrice" type="number" required min="0" max="999999999999" step="0.01" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Opening stock<input name="openingStock" type="number" required min="0" max="999999999" step="1" defaultValue="0" style={styles.input} /></label>
           <label style={styles.label}>Reorder alert level<input name="reorderLevel" type="number" required min="0" max="999999999" step="1" defaultValue="3" style={styles.input} /></label>
@@ -112,11 +114,11 @@ export default async function InventoryPage({ searchParams }: PageProps) {
               {products.map((product) => {
                 const isLow = product.quantityOnHand <= product.reorderLevel;
                 return <tr key={product.id}>
-                  <td style={styles.td}><strong>{product.name}</strong><small style={styles.subtle}>Updated {product.updatedAt.toLocaleDateString("en-UG")}</small></td>
+                  <td style={styles.td}><strong>{product.name}</strong><small style={styles.subtle}>Updated {new Date(product.updatedAt).toLocaleDateString("en-UG")}</small></td>
                   <td style={styles.td}><code>{product.sku}</code></td>
                   <td style={styles.td}>{product.category ?? "—"}</td>
-                  <td style={styles.td}>{Number(product.costPrice).toLocaleString("en-UG", { maximumFractionDigits: 2 })}</td>
-                  <td style={styles.td}>{Number(product.sellingPrice).toLocaleString("en-UG", { maximumFractionDigits: 2 })}</td>
+                  <td style={styles.td}>{product.costPrice.toLocaleString("en-UG")}</td>
+                  <td style={styles.td}>{product.sellingPrice.toLocaleString("en-UG")}</td>
                   <td style={styles.td}><span style={isLow ? styles.lowStock : styles.stock}>{product.quantityOnHand}</span></td>
                   <td style={styles.td}>{product.reorderLevel}</td>
                   {canManage && <td style={styles.td}><form action={adjustStockAction} style={styles.adjustForm}>
@@ -131,7 +133,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
             </tbody>
           </table>
         </div>
-        <p style={styles.footnote}>Amounts are shown in UGX. This screen manages inventory records only; it does not create a retail sale or post a financial ledger entry.</p>
+        <p style={styles.footnote}>Prices are whole UGX shillings in D1. This screen manages inventory records only; it does not create a retail sale or post a financial ledger entry.</p>
       </section>
       <footer style={styles.footer}>OmniPoint UG Limited · Retail inventory · Access: {staff.role.replaceAll("_", " ")}</footer>
     </main>
