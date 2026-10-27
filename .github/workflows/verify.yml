@@ -31,8 +31,8 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Test Worker authentication and authorization failure paths
-        run: npm run test:worker-auth
+      - name: Test Cloudflare Worker auth and Resend email helpers
+        run: npm run test:worker
       - name: Lint
         run: npm run lint
       - name: Build legacy dashboard (migration checkpoint only)
