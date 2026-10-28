@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Activity, ArrowDownLeft, ArrowUpRight, Bell, Boxes, BriefcaseBusiness,
   CheckCircle2, ChevronDown, CircleDollarSign,
@@ -73,7 +74,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
     <main className={dark ? "app-shell" : "app-shell light"}>
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
-          <div className="brand-mark"><img src="/branding/otya-mark.svg" alt="" width={32} height={32} /></div>
+          <div className="brand-mark"><Image src="/branding/otya-mark.svg" alt="" width={32} height={32} /></div>
           <div><div className="brand-name">OmniPoint<span>.</span></div><div className="brand-subtitle">OTYA OS · BUSINESS OPERATIONS</div></div>
           <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Close menu"><X size={19}/></button>
         </div>
