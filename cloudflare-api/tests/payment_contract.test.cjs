@@ -56,3 +56,48 @@ test("disabled provider advertises no capabilities and never reports success", a
     /payment_provider_not_configured/,
   );
 });
+
+const {
+  QuicktellerSandboxCheckout,
+} = require("/tmp/omnipoint-payment-tests/quickteller-sandbox.js");
+
+function sandboxConfig(overrides = {}) {
+  return {
+    merchantCode: "TEST-MERCHANT",
+    payItemId: "TEST-ITEM",
+    siteRedirectUrl: "https://omnipoint.example.invalid/payment-return",
+    customerEmail: "sandbox@example.invalid",
+    ...overrides,
+  };
+}
+
+test("Quickteller adapter only prepares a fixed sandbox POST form and never claims success", async () => {
+  const provider = new QuicktellerSandboxCheckout(sandboxConfig());
+  const result = await provider.initiatePayment(validRequest());
+  assert.equal(result.status, "PENDING");
+  assert.equal(result.provider, "quickteller-sandbox");
+  assert.equal(result.checkoutForm.action, "https://newwebpay-sandbox.interswitchng.com/collections/w/pay");
+  assert.equal(result.checkoutForm.method, "POST");
+  assert.equal(result.checkoutForm.fields.txn_ref, "omni-txn-001");
+  assert.equal(result.checkoutForm.fields.amount, "250000");
+  assert.equal(result.checkoutForm.fields.currency, "800");
+  assert.ok(Object.values(provider.getCapabilities()).every((enabled) => enabled === false));
+  await assert.rejects(() => provider.checkStatus("omni-txn-001"), /requery_not_implemented/);
+  await assert.rejects(
+    () => provider.verifyCallback(new Request("https://example.invalid/callback", { method: "POST" })),
+    /callback_verification_not_implemented/,
+  );
+});
+
+test("Quickteller sandbox adapter rejects non-checkout services and unsafe redirect configuration", async () => {
+  const provider = new QuicktellerSandboxCheckout(sandboxConfig());
+  assert.equal(
+    (await provider.initiatePayment(validRequest({ service: "AGENCY_CASH_OUT" }))).reasonCode,
+    "sandbox_adapter_shop_checkout_only",
+  );
+  const unsafeRedirect = new QuicktellerSandboxCheckout(sandboxConfig({ siteRedirectUrl: "http://insecure.example.invalid/return" }));
+  assert.equal(
+    (await unsafeRedirect.initiatePayment(validRequest())).reasonCode,
+    "redirect_url_must_use_https",
+  );
+});
