@@ -1,6 +1,12 @@
+![Otya brand mark](public/branding/otya-mark.svg)
+
 # OmniPoint
 
-OmniPoint is the retail and financial-agency operations system for Otya Hold Ltd T/A OmniPoint, the owner's own business in Uganda.
+**Part of the Otya family · One connected Otya family**
+
+OmniPoint is the retail and financial-agency operations system for **Otya Hold Ltd T/A OmniPoint**, the owner's own business in Uganda. OmniPoint is a product/business name, not a claim that a separate legal company has been formed.
+
+Brand assets and naming rules: [Otya Family Brand Guidelines](docs/BRAND_GUIDELINES.md) · [Otya wordmark](public/branding/otya-wordmark.svg)
 
 ## Current implementation status
 
