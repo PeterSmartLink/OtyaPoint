@@ -43,6 +43,8 @@ export interface PaymentInitiation {
   providerReference?: string;
   /** A hosted checkout URL, when the provider's product uses one. */
   checkoutUrl?: string;
+  /** Server-generated fields for a provider-hosted HTML POST form. */
+  checkoutForm?: { action: string; method: "POST"; fields: Record<string, string> };
   /** Safe, non-secret code for logs and support. */
   reasonCode?: string;
 }
