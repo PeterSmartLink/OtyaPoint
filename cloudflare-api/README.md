@@ -13,7 +13,7 @@ npx wrangler dev --config wrangler.toml
 python3 cloudflare-api/tests/test_core_schema.py
 ```
 
-The D1 development database has the core, company-scope and staff-profile migrations applied and migration history recorded. Core business tables have been verified empty. Local SQLite tests validate schema invariants, but do not prove Cloudflare D1 concurrency or production readiness.
+The D1 development database has the core, company-scope and staff-profile migrations applied and migration history recorded. Core business tables have been verified empty. Local SQLite tests validate schema invariants, but do not prove Cloudflare D1 concurrency or production readiness. The older OmniPoint-only D1, R2, KV and queue resources have been retired; Otya resources remain untouched.
 
 ## API surface
 
