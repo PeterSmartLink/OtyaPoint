@@ -44,13 +44,12 @@ python3 cloudflare-api/tests/test_core_schema.py
 
 ## Cloudflare API work
 
-- `wrangler.toml` and the existing `cloudflare-api` scaffold remain the isolated migration-test setup for earlier experiments.
-- `wrangler.omnipoint.test.toml` describes the dedicated test configuration for the new API/schema work.
-- `wrangler.omnipoint.toml` describes the proposed dedicated production Worker bindings. Do not deploy this configuration until the release gates are satisfied.
-- The production config has no custom domain. Do not bind OmniPoint records into the shared `otya-core` Worker by default.
-- Business routes verify the caller's Otya access token through the existing Auth Worker service binding, then require an active local staff record. The browser's role claims are never trusted. No public bootstrap-admin route exists.
-- Cash POS posting is designed to use one D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Validate concurrency and failure rollback in CI and an isolated environment before production use.
-- Agency transactions deliberately return a disabled response until verified provider adapters and status reconciliation are ready.
+- `wrangler.toml` is the single configuration and points only to the isolated `omnipoint-dev` database and development resources.
+- It has `workers_dev = false`; no Worker has been deployed from this configuration, and no public route or custom domain is configured.
+- Use `npx wrangler dev --config wrangler.toml` for local development. Do not deploy until the release gates pass.
+- Business routes validate Otya Auth through a service binding, then require an active local OmniPoint staff record. Browser-supplied roles are never trusted.
+- Cash POS posting is designed around a D1 batch with stock guards, stock movements, balanced retail ledger entries and audit logging. Concurrency, idempotency and rollback tests remain required.
+- Agency transactions remain disabled until provider adapters, cryptographic callback verification, status reconciliation and settlement controls are ready.
 
 ## Data migration and recovery
 
