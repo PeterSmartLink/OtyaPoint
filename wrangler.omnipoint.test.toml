@@ -1,7 +1,7 @@
 name = "omnipoint-api-test"
 main = "cloudflare-api/src/index.ts"
 compatibility_date = "2026-10-23"
-workers_dev = true
+workers_dev = false
 
 [[d1_databases]]
 binding = "DB"
@@ -9,5 +9,5 @@ database_name = "omnipoint-migration-test"
 database_id = "43d274ce-d46e-462f-bcef-59b93caefc21"
 migrations_dir = "cloudflare-api/migrations"
 
-# Isolated integration-test configuration. It deliberately does not bind production
+# Isolated integration-test configuration. It deliberately has no public workers.dev endpoint and does not bind production
 # R2, KV, queues, custom domains, or secrets.
