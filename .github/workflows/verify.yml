@@ -62,6 +62,16 @@ jobs:
       - name: Type-check Cloudflare Worker
         run: npm run check:worker
 
+      - name: Compile payment modules for isolated contract tests
+        run: >-
+          npx tsc cloudflare-api/src/payments/contracts.ts
+          cloudflare-api/src/payments/disabled-provider.ts
+          --target ES2022 --module commonjs --lib ES2022,DOM
+          --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
+
+      - name: Test payment request validation and disabled-provider safety
+        run: node --test cloudflare-api/tests/payment_contract.test.cjs
+
       - name: Validate and bundle the single Wrangler configuration without deploying
         run: npx wrangler@4 deploy --dry-run --config wrangler.toml
 
