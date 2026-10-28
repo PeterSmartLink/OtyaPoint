@@ -55,6 +55,8 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Validate remaining legacy dashboard Prisma schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
         run: npm run db:validate
 
       - name: Type-check Cloudflare Worker
