@@ -3,7 +3,7 @@ name: Verify OmniPoint
 on:
   pull_request:
   push:
-    branches: [main, "work/**"]
+    branches: [main, "work/**", "chore/**", "feat/**", "rebuild/**"]
 
 permissions:
   contents: read
@@ -13,57 +13,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
+  cloudflare-foundation:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
-      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-not-a-real-key
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Validate migration filenames and unique versions
+
+      - name: Validate migration naming and order
         shell: bash
         run: |
           set -euo pipefail
-          declare -A seen=()
-          shopt -s nullglob
-          files=(supabase/migrations/*.sql)
-          if (( ${#files[@]} == 0 )); then
-            echo "No SQL migrations found."
-            exit 1
-          fi
-          for file in "${files[@]}"; do
-            name="${file##*/}"
-            if [[ ! "$name" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]]; then
-              echo "Invalid migration filename: $name"
-              exit 1
-            fi
-            version="${name%%_*}"
-            if [[ -n "${seen[$version]:-}" ]]; then
-              echo "Duplicate migration version $version: ${seen[$version]} and $name"
-              exit 1
-            fi
-            seen[$version]="$name"
-          done
-      - name: Test isolated SQLite schema compatibility
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          files = sorted(Path("cloudflare-api/migrations").glob("*.sql"))
+          assert files, "No Cloudflare D1 migrations found"
+          versions = []
+          for path in files:
+              match = re.fullmatch(r"(\d{4})_[a-z0-9_]+\.sql", path.name)
+              assert match, f"Invalid migration filename: {path.name}"
+              versions.append(int(match.group(1)))
+          assert versions == list(range(1, len(versions) + 1)), f"Migration versions must be sequential: {versions}"
+          print("Validated migrations:", ", ".join(p.name for p in files))
+          PY
+
+      - name: Test legacy SQLite migration compatibility
         run: python3 migration/d1/test_schema.py
-      - name: Test OmniPoint D1 core schema and invariants
+
+      - name: Test OmniPoint core schema and stock invariants
         run: python3 cloudflare-api/tests/test_core_schema.py
+
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
+          cache: npm
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Validate Prisma schema
+
+      - name: Validate remaining legacy dashboard Prisma schema
         run: npm run db:validate
+
       - name: Type-check Cloudflare Worker
         run: npm run check:worker
+
       - name: Lint
         run: npm run lint
-      - name: Build
+
+      - name: Build dashboard and backend package
         run: npm run build
