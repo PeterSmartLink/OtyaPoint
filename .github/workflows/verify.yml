@@ -62,6 +62,9 @@ jobs:
       - name: Type-check Cloudflare Worker
         run: npm run check:worker
 
+      - name: Validate and bundle the single Wrangler configuration without deploying
+        run: npx wrangler@4 deploy --dry-run --config wrangler.toml
+
       - name: Lint
         run: npm run lint
 
