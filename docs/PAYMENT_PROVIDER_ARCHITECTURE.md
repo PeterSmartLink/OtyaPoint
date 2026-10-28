@@ -4,7 +4,7 @@
 
 Interswitch / Quickteller is the preferred first provider to evaluate for Uganda, not a hard dependency. OmniPoint owns its transaction IDs, business rules, ledger, audit trail, customer experience and reconciliation records. Provider references are stored separately. The adapter contract must let us replace or add a provider without rewriting the shop and agency workflows.
 
-**Current state:** contracts and a safe disabled provider are defined. No Interswitch/Quickteller adapter exists, no credentials are configured, and no provider requests or real-money operations are enabled.
+**Current state:** provider-neutral contracts and a safe disabled provider are defined. A sandbox-only Quickteller Web Checkout form builder now exists, but it is not wired into the API and performs no network calls. Server-side transaction requery and callback verification are not implemented, no credentials are configured, and no provider requests or real-money operations are enabled.
 
 ## Boundary
 
@@ -45,8 +45,9 @@ Online collections, shop checkout, airtime/data, bill payments, agency cash-in/c
 
 - [x] Define provider-neutral types, status model and service capabilities.
 - [x] Add a disabled implementation that performs no network calls and cannot claim success.
-- [ ] Verify the exact Quickteller/Interswitch Uganda product, API version, credentials and permitted use from the user's developer account.
-- [ ] Implement only the verified product's server-side adapter and documented callback/status verification.
+- [x] Add a sandbox-only Web Checkout form builder using the documented sandbox POST endpoint and UGX numeric currency code; keep it unconnected to the API.
+- [ ] Verify the exact Quickteller/Interswitch Uganda product, API version, merchant/pay item configuration and permitted use from the user's developer account.
+- [ ] Implement server-side transaction requery and authoritative amount/status matching before wiring checkout into the API.
 - [ ] Add automated tests for idempotency, duplicate/out-of-order callbacks, timeouts, mismatched amount/currency, reversals, and reconciliation.
 - [ ] Keep agency cash-in/cash-out disabled until their specific product access is confirmed.
 - [ ] Review, test and approve before any deployment or live payment activation.
