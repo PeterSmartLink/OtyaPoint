@@ -19,6 +19,19 @@ The Otya Server `auth-worker` already exposes password login, refresh, logout, a
 5. **No secret exposure:** no JWT signing secret in OtyaPoint; no refresh token in localStorage/sessionStorage; no token values in logs; no secrets in `NEXT_PUBLIC_*` variables.
 6. **Private network path first:** prefer a Cloudflare service binding where the runtime supports it. If the Next.js runtime cannot use the binding, use a documented HTTPS endpoint with strict origin/rate limits and never expose internal administrative endpoints publicly. Confirm actual runtime and routing before selecting the transport.
 
+## Verified transport finding (2026-10-29)
+
+A supported routing path already exists in the Otya Server repository:
+
+- `src/app/auth/[...path]/route.ts` forwards `/auth/*` requests through the OpenNext Cloudflare `AUTH` service binding.
+- `src/production-router.mjs` classifies `/auth` and `/auth/*` as core backend routes.
+- The production auth Worker handles `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, and `GET /auth/verify`.
+- Both the auth Worker and the core route are configured with `workers_dev = false`; this does not mean the existing core-domain route is unavailable, because it is reached through the core Worker route configuration.
+
+This establishes a known route family, not permission to deploy or a guarantee that a separately hosted OmniPoint dashboard can use a Cloudflare service binding. Before implementation, confirm the actual deployed dashboard host and its runtime. If the dashboard remains a separate Next.js service, use the existing HTTPS core-domain `/auth/*` route only through a server-side `OTYA_AUTH_BASE_URL` configuration and validate it against the expected trusted origin. Do not accept an arbitrary URL from a request or form. If the dashboard is later hosted in the same Cloudflare Worker runtime, prefer the configured `AUTH` service binding.
+
+The transport must be tested in a non-production preview with synthetic accounts before changing the active login path. Do not send real credentials as a connectivity test. Do not create a new public route or expose the service binding solely to make the dashboard integration work.
+
 ## Login/session contract
 
 - `POST /auth/login`: validate email/password server-side; use the auth worker's current response shape; set secure HttpOnly cookies only after a successful response. Do not pass through arbitrary upstream headers or return token values to the browser.
