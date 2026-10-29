@@ -88,10 +88,20 @@ def main() -> int:
                LEFT JOIN omni_retail_sales s ON s.id = l.sale_id
                WHERE s.id IS NULL"""
         ).fetchone()[0]
+        unbalanced_sources = db.execute(
+            """SELECT COUNT(*) FROM (
+                 SELECT company_id, ledger_type, source_type, source_id
+                 FROM omni_ledger_entries
+                 GROUP BY company_id, ledger_type, source_type, source_id
+                 HAVING COALESCE(SUM(debit), 0) != COALESCE(SUM(credit), 0)
+               )"""
+        ).fetchone()[0]
         if negative_stock:
             raise SystemExit(f"FAIL: restored export contains {negative_stock} negative-stock rows")
         if orphan_sale_lines:
             raise SystemExit(f"FAIL: restored export contains {orphan_sale_lines} orphan sale-line rows")
+        if unbalanced_sources:
+            raise SystemExit(f"FAIL: restored export contains {unbalanced_sources} unbalanced ledger sources")
 
         checksum = hashlib.sha256(sql_bytes).hexdigest()
         print("D1 export restore: PASS")
@@ -100,6 +110,7 @@ def main() -> int:
         print(f"Foreign-key violations: {len(fk_errors)}")
         print(f"Negative-stock rows: {negative_stock}")
         print(f"Orphan sale lines: {orphan_sale_lines}")
+        print(f"Unbalanced ledger sources: {unbalanced_sources}")
         for table, count in row_counts.items():
             print(f"Row count {table}: {count}")
         print("No row contents were printed or uploaded.")
