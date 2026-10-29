@@ -47,6 +47,33 @@ jobs:
       - name: Type-check Worker
         run: npm run check:worker
 
+      - name: Require a configured private preview endpoint before deployment
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ vars.OTYAPOINT_PREVIEW_URL }}
+          ACCESS_CONFIRMED: ${{ vars.OTYAPOINT_PREVIEW_ACCESS_CONFIRMED }}
+        run: |
+          set -euo pipefail
+          # A successful Wrangler deploy is not useful if workers.dev is disabled
+          # and no route exists. Do not create an inaccessible Worker by accident.
+          if ! grep -Eq '^\\[\\[routes\\]\\]' wrangler.toml; then
+            echo "::error::No [[routes]] entry exists in wrangler.toml. Configure an isolated preview hostname and have Cloudflare Access protection independently verified before deploying."
+            exit 1
+          fi
+          test -n "$PREVIEW_URL" || { echo "::error::Set OTYAPOINT_PREVIEW_URL in the omnipoint-dev environment."; exit 1; }
+          test "$ACCESS_CONFIRMED" = "true" || { echo "::error::Set OTYAPOINT_PREVIEW_ACCESS_CONFIRMED=true only after verifying the preview route is protected by Cloudflare Access."; exit 1; }
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url = urlparse(os.environ["PREVIEW_URL"])
+          host = (url.hostname or "").lower()
+          if url.scheme != "https" or not host:
+              raise SystemExit("Preview URL must be an absolute HTTPS URL.")
+          if host in {"petersmartlink.com", "www.petersmartlink.com"} or not any(token in host for token in ("preview", "dev")):
+              raise SystemExit("Preview host must be an isolated preview/dev hostname, not a production website hostname.")
+          print("Isolated HTTPS preview endpoint settings are present; no secrets were printed.")
+          PY
+
       - name: Validate Worker bundle without deploying
         run: npx wrangler@4 deploy --dry-run --config wrangler.toml
         env:
