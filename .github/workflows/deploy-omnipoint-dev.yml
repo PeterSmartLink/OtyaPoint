@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           # A successful Wrangler deploy is not useful if workers.dev is disabled
           # and no route exists. Do not create an inaccessible Worker by accident.
-          if ! grep -Eq '^\\[\\[routes\\]\\]' wrangler.toml; then
+          if ! grep -Fq '[[routes]]' wrangler.toml; then
             echo "::error::No [[routes]] entry exists in wrangler.toml. Configure an isolated preview hostname and have Cloudflare Access protection independently verified before deploying."
             exit 1
           fi
