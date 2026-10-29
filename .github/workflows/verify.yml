@@ -39,16 +39,20 @@ jobs:
         run: npm run lint
       - name: Build legacy dashboard (migration checkpoint only)
         run: npm run build
-      - name: Compile payment and provider scaffolds for isolated contract tests
+      - name: Compile payment modules for isolated contract tests
         run: >-
           npx tsc cloudflare-api/src/payments/contracts.ts
           cloudflare-api/src/payments/disabled-provider.ts
           cloudflare-api/src/payments/quickteller-sandbox.ts
-          cloudflare-api/src/providers/airtel.ts
+          --target ES2022 --module commonjs --lib ES2022,DOM
+          --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
+      - name: Type-check disabled provider scaffolds
+        run: >-
+          npx tsc cloudflare-api/src/providers/airtel.ts
           cloudflare-api/src/providers/interswitch.ts
           cloudflare-api/src/providers/mtn.ts
           --target ES2022 --module commonjs --lib ES2022,DOM
-          --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
+          --strict --skipLibCheck --outDir /tmp/omnipoint-provider-tests
       - name: Test payment request validation and disabled-provider safety
         run: node --test cloudflare-api/tests/payment_contract.test.mjs
       - name: Smoke test local Cloudflare Worker and fail-closed auth
