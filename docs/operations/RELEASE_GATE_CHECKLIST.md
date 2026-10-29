@@ -120,3 +120,15 @@ A follow-up read-only Cloudflare API inventory confirmed that the intended devel
 This narrows the discrepancy: it is not that the development D1/R2/KV/queue resources are missing; it is that the configured OtyaPoint Worker has not been deployed/registered, and no public/private preview route has been established. The configured `workers_dev = false` means a deploy alone would not provide a standard workers.dev preview endpoint. Do not turn it on or add a route without explicit approval and a confirmed access-control plan.
 
 The read-only inventory did not read business rows or secret values and did not alter any Cloudflare resource.
+
+## Legacy Supabase runtime dependency remains active
+
+A repository code search found active Supabase-dependent paths in the current source tree:
+
+- `middleware.ts` reads Supabase public URL/anon-key variables and uses them in the request/auth middleware path.
+- `lib/supabase/server.ts` creates the server-side Supabase Auth client.
+- `lib/supabase/admin.ts` uses the Supabase service-role client for staff invitations.
+
+Therefore the current package dependencies and auth middleware must not be removed as a simple cleanup. The Cloudflare-only migration needs a staged replacement: define the Otya Auth session/cookie contract, migrate each call site and staff-invitation operation, add regression tests, then remove Supabase packages and variables only when repository-wide search and CI prove no active path remains. Keep service-role credentials out of public variables and never print secret values.
+
+This is a code-path finding from repository search, not a statement that any Supabase database contains current production data.
