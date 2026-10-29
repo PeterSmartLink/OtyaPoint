@@ -105,3 +105,18 @@ Read-only Cloudflare API check performed on 2026-10-29:
 Do not deploy `omnipoint-dev-api` yet. First inspect the exact live IDs and bindings for the development D1, R2, KV, queue, and auth service target; verify the intended account/environment; then run a Worker dry-run and local tests. A preview endpoint must remain private (Cloudflare Access or an approved private service path), and must never point to `otya-store-db` or other production resources.
 
 This inventory is a point-in-time observation, not proof of app readiness or a deployment authorization.
+
+## Development resource IDs — read-only verification
+
+A follow-up read-only Cloudflare API inventory confirmed that the intended development resources themselves exist and their configured IDs match the repository:
+
+- D1 `omnipoint-dev`: `2c4de5d4-6898-4768-9a60-091bca7779b5`.
+- R2 buckets: `omnipoint-dev-private` and `omnipoint-dev-backups`.
+- KV namespace `omnipoint-dev-cache`: `69ca8a463e60410d907749d4e863faf4`.
+- Queue `omnipoint-dev-jobs` and DLQ `omnipoint-dev-jobs-dlq` both exist. The queue inventory showed no configured producers or consumers for these development queues.
+- Service target `otya-auth` exists as a Worker and has its own D1/KV bindings. The OtyaPoint config's service binding target is therefore a known Worker, but service compatibility/auth behavior still needs tests.
+- The separate `omnipoint-dev-api` Worker is still absent from the live Worker script inventory.
+
+This narrows the discrepancy: it is not that the development D1/R2/KV/queue resources are missing; it is that the configured OtyaPoint Worker has not been deployed/registered, and no public/private preview route has been established. The configured `workers_dev = false` means a deploy alone would not provide a standard workers.dev preview endpoint. Do not turn it on or add a route without explicit approval and a confirmed access-control plan.
+
+The read-only inventory did not read business rows or secret values and did not alter any Cloudflare resource.
