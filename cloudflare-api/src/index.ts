@@ -35,6 +35,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   }
 });
 const uuid = () => crypto.randomUUID();
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
 const safeText = (value: unknown, max = 180) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const int = (value: unknown, min = 0) => Number.isSafeInteger(value) && Number(value) >= min ? Number(value) : null;
 const isRole = (value: unknown): value is Role => typeof value === "string" && roles.includes(value as Role);
@@ -217,8 +221,19 @@ export default {
           if (!productId || quantity === null || quantity > 10000 || seen.has(productId)) return json({ error: "invalid_sale_items" }, 400);
           seen.add(productId); normalized.push({ productId, quantity });
         }
-        const existing = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
-        if (existing) return json({ data: existing, replayed: true, requestId: rid });
+        const fingerprintPayload = JSON.stringify({
+          paymentMethod,
+          items: [...normalized].sort((a, b) => a.productId.localeCompare(b.productId))
+        });
+        const requestFingerprint = await sha256Hex(fingerprintPayload);
+        const existing = await env.DB.prepare("SELECT id,receipt_number,total,status,request_fingerprint FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string; request_fingerprint: string | null }>();
+        if (existing) {
+          if (!existing.request_fingerprint || existing.request_fingerprint !== requestFingerprint) {
+            return json({ error: "idempotency_key_payload_conflict" }, 409);
+          }
+          const { request_fingerprint: _fingerprint, ...sale } = existing;
+          return json({ data: sale, replayed: true, requestId: rid });
+        }
         const placeholders = normalized.map((_, i) => "?" + (i + 2)).join(",");
         const productRows = await env.DB.prepare(
           "SELECT id,sku,name,cost_price,selling_price,quantity_on_hand,is_active FROM omni_products WHERE company_id=?1 AND id IN (" + placeholders + ")"
@@ -240,8 +255,8 @@ export default {
         }
         if (!Number.isSafeInteger(subtotal) || !Number.isSafeInteger(costOfGoods) || subtotal <= 0) return json({ error: "invalid_sale_total" }, 400);
         const statements: D1Statement[] = [
-          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id,company_id) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6,?7)")
-            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id, staff.company_id)
+          env.DB.prepare("INSERT INTO omni_retail_sales (id,receipt_number,status,currency,subtotal,discount_total,tax_total,total,cost_of_goods,payment_method,idempotency_key,actor_id,company_id,request_fingerprint) VALUES (?1,?2,'COMPLETED','UGX',?3,0,0,?3,?4,'CASH',?5,?6,?7,?8)")
+            .bind(saleId, receiptNumber, subtotal, costOfGoods, idempotencyKey, staff.id, staff.company_id, requestFingerprint)
         ];
         for (const line of saleLines) {
           statements.push(env.DB.prepare(
@@ -264,8 +279,12 @@ export default {
         } catch (error) {
           if (error instanceof Error && (error.message.includes("INSUFFICIENT_STOCK") || error.message.includes("PRODUCT_NOT_AVAILABLE"))) return json({ error: "stock_conflict_or_product_unavailable" }, 409);
           if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-            const replay = await env.DB.prepare("SELECT id,receipt_number,total,status FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string }>();
-            if (replay) return json({ data: replay, replayed: true, requestId: rid });
+            const replay = await env.DB.prepare("SELECT id,receipt_number,total,status,request_fingerprint FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string; request_fingerprint: string | null }>();
+            if (replay) {
+              if (!replay.request_fingerprint || replay.request_fingerprint !== requestFingerprint) return json({ error: "idempotency_key_payload_conflict" }, 409);
+              const { request_fingerprint: _fingerprint, ...sale } = replay;
+              return json({ data: sale, replayed: true, requestId: rid });
+            }
             return json({ error: "duplicate_conflict" }, 409);
           }
           throw error;
