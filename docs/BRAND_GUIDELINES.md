@@ -10,7 +10,7 @@
 |---|---|---|
 | **Otya Hold Ltd** | Parent legal entity | Legal notices, ownership, contracts and company-level policies |
 | **Otya OS** | Unified ecosystem/platform | Cross-product ecosystem, navigation and platform-level descriptions |
-| **Otya Server** | Shared backend and integration layer | Shared APIs, internal services, provider adapters and common infrastructure |
+| **Otya End** | Shared backend and integration layer | Shared APIs, identity integration, provider adapters, Resend and common infrastructure |
 | **Otya Auth** | Shared identity service | Authentication and identity |
 | **Otya Core** | Shared core platform services | Core APIs and reusable platform capabilities |
 | **Otya Next** | Connected application/product | The product currently named Otya Next; preserve its existing function |
@@ -49,7 +49,7 @@ Use teal and ink as the default combination. Gold is an accent, not a large back
 
 ## 3. Product naming and writing
 
-- Write **Otya OS**, **Otya Server**, **Otya Auth**, **Otya Core**, **Otya Next**, **Otya Media**, **OtyaHub**, and **OtyaPoint** exactly as shown.
+- Write **Otya OS**, **Otya End**, **Otya Auth**, **Otya Core**, **Otya Next**, **Otya Media**, **OtyaHub**, and **OtyaPoint** exactly as shown.
 - Use **Otya family** for the connected suite, not as a replacement for each product's name.
 - The legacy repository slug `OmniPoint` may remain for compatibility until a coordinated rename is approved. Product-specific interfaces should lead with their product name and may include a subtle “Part of Otya OS” descriptor when useful.
 - Use **“One connected Otya family”** as the umbrella brand line.
