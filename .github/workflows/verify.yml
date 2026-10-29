@@ -43,7 +43,7 @@ jobs:
           --target ES2022 --module commonjs --lib ES2022,DOM
           --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
       - name: Test payment request validation and disabled-provider safety
-        run: node --test cloudflare-api/tests/payment_contract.test.cjs
+        run: node --test cloudflare-api/tests/payment_contract.test.mjs
       - name: Smoke test local Cloudflare Worker and fail-closed auth
         shell: bash
         run: |
