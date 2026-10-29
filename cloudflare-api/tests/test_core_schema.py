@@ -142,6 +142,22 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                    VALUES ('staff-profile-2', 'otya-user-2', 'company-1', 'ATTENDANT', 'ACTIVE', 'AGENT001')"""
             )
 
+    def test_sale_request_fingerprint_is_available_and_legacy_rows_are_unverified(self):
+        columns = {
+            row[1] for row in self.db.execute("PRAGMA table_info(omni_retail_sales)")
+        }
+        self.assertIn("request_fingerprint", columns)
+        self.add_product()
+        self.db.execute(
+            """INSERT INTO omni_retail_sales
+               (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id)
+               VALUES ('sale-legacy', 'OP-LEGACY-001', 200, 200, 'CASH', 'legacy-key-0001', 'staff-test')"""
+        )
+        fingerprint = self.db.execute(
+            "SELECT request_fingerprint FROM omni_retail_sales WHERE id='sale-legacy'"
+        ).fetchone()[0]
+        self.assertIsNone(fingerprint, "legacy sales must not be treated as verified payload matches")
+
     def test_staff_role_and_idempotency_constraints(self):
         self.db.execute(
             """INSERT INTO omni_staff_memberships
