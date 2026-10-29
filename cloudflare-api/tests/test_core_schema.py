@@ -221,7 +221,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             ).fetchone()[0]
             self.assertEqual(before_movements, 1)
 
-            db.executescript(migration.read_text(encoding="utf-8"))
+            db.executescript("BEGIN;\\n" + migration.read_text(encoding="utf-8") + "\\nCOMMIT;")
 
             self.assertEqual(
                 db.execute("SELECT id, company_id, request_fingerprint FROM omni_retail_sales WHERE id='sale-existing'").fetchone(),
@@ -263,6 +263,24 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             }
             self.assertIn("omni_sale_line_stock_guard", trigger_names)
             self.assertIn("omni_sale_line_stock_post", trigger_names)
+            self.assertIn("omni_stock_movement_guard", trigger_names)
+            self.assertIn("omni_stock_movement_apply", trigger_names)
+
+            index_rows = db.execute("PRAGMA index_list('omni_retail_sales')").fetchall()
+            index_names = {row[1] for row in index_rows}
+            self.assertIn("idx_omni_sales_company_idempotency", index_names)
+            # SQLite's inline UNIQUE constraint creates an auto-index; the rebuilt
+            # schema must have only the company-scoped unique index for this key.
+            key_indexes = [
+                row[1] for row in index_rows
+                if db.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (row[1],)
+                ).fetchone()[0] is not None
+                and "idempotency_key" in db.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (row[1],)
+                ).fetchone()[0]
+            ]
+            self.assertEqual(key_indexes, ["idx_omni_sales_company_idempotency"])
         finally:
             db.close()
 
