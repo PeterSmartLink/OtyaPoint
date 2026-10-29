@@ -1,7 +1,7 @@
 -- OmniPoint D1 compatibility spike only.
 -- Synthetic/test database: omnipoint-migration-test (EU jurisdiction).
 -- Do not apply to production or use this as a cutover migration without review.
--- Money is stored as integer minor units (UGX shillings) to avoid SQLite floating-point money errors.
+-- Money values are stored as whole UGX shillings (integers); do not accept decimal fractions for UGX.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS User (
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS ReconciliationSession (
 );
 CREATE INDEX IF NOT EXISTS ReconciliationSession_date_type_status_idx ON ReconciliationSession(businessDate,ledgerType,status);
 
--- Money conversion contract: Prisma Decimal(18,2) values are represented as integer minor units.
--- For UGX, confirm the product's currency precision policy before integrating this schema.
+-- Money contract for this D1 schema: UGX amounts are whole shillings stored as integers.
+-- Any future multi-currency support must define explicit currency-specific precision and conversion rules.
 -- Application code must use explicit transactions for stock decrement + sale + stock movement +
 -- balanced ledger writes; D1 batch/transaction behavior must be proven with tests before cutover.

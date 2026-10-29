@@ -1,4 +1,3 @@
-import { handleSavingsGroups, type SavingsEnv, type SavingsClaims } from "./savings-groups";
 interface D1Result<T> { results: T[] }
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -10,39 +9,65 @@ interface D1Database {
   prepare(query: string): D1Statement;
   batch<T = unknown>(statements: D1Statement[]): Promise<T[]>;
 }
-export interface Env { DB: D1Database; AUTH_HMAC_SECRET?: string }
+export interface AuthServiceBinding { fetch(request: Request): Promise<Response> }
+export interface Env { DB: D1Database; AUTH?: AuthServiceBinding }
+
+async function notifyLowStock(env: Env, notice: { productName: string; sku: string; quantityOnHand: number; reorderLevel: number }): Promise<void> {
+  if (!env.AUTH) return;
+  try {
+    const response = await env.AUTH.fetch(new Request('https://auth/internal/notifications/omnipoint/low-stock', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-otya-service': 'omnipoint' },
+      body: JSON.stringify(notice),
+      signal: AbortSignal.timeout(5000),
+    }));
+    if (!response.ok) console.warn('[omnipoint] low-stock notification not accepted');
+  } catch {
+    // Inventory operations must remain successful if the notification service is unavailable.
+    console.warn('[omnipoint] low-stock notification service unavailable');
+  }
+}
 type Role = "SOVEREIGN" | "ATTENDANT" | "MANAGER" | "MANAGING_DIRECTOR" | "CHAIRMAN";
-type Claims = { sub: string; idp: "supabase"; exp: number; iss: "omnipoint"; aud: "omnipoint-api" };
-type Actor = Claims & { role: Role };
+type Actor = { sub: string; idp: "otya-auth"; role: Role };
+const isRole = (value: string): value is Role => ["SOVEREIGN", "ATTENDANT", "MANAGER", "MANAGING_DIRECTOR", "CHAIRMAN"].includes(value);
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } });
-const decode = (s: string) => { const x=s.replace(/-/g,"+").replace(/_/g,"/"); return Uint8Array.from(atob(x+"=".repeat((4-x.length%4)%4)),c=>c.charCodeAt(0)); };
-const isRole = (role: unknown): role is Role => ["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"].includes(String(role));
-
 async function authenticate(request: Request, env: Env): Promise<Actor | Response> {
-  if (!env.AUTH_HMAC_SECRET) return json({ error: "auth_not_configured" }, 503);
-  const token=(request.headers.get("authorization")||"").replace(/^Bearer /,"");
-  const p=token.split(".");
-  if(p.length!==3) return json({error:"unauthorized"},401);
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  if (!token) return json({ error: "unauthorized" }, 401);
+  if (!env.AUTH) return json({ error: "auth_service_unavailable" }, 503);
 
-  let claims: Claims;
+  // Verify the Otya access token inside the trusted Cloudflare network.
+  // Never accept client-supplied identity/role claims or a static shared HMAC.
+  let subject: string;
   try {
-    const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.AUTH_HMAC_SECRET),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
-    if(!await crypto.subtle.verify("HMAC",key,decode(p[2]),new TextEncoder().encode(p[0]+"."+p[1]))) return json({error:"unauthorized"},401);
-    const c=JSON.parse(new TextDecoder().decode(decode(p[1]))) as Partial<Claims>;
-    if(typeof c.sub!=="string"||!c.sub||c.idp!=="supabase"||!Number.isFinite(c.exp)||Number(c.exp)<=Date.now()/1000||c.iss!=="omnipoint"||c.aud!=="omnipoint-api") return json({error:"unauthorized"},401);
-    claims = { sub:c.sub, idp:"supabase", exp:Number(c.exp), iss:"omnipoint", aud:"omnipoint-api" };
-  } catch { return json({error:"unauthorized"},401); }
+    const response = await env.AUTH.fetch(new Request("https://auth/auth/verify", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    }));
+    if (response.status === 401 || response.status === 403) return json({ error: "unauthorized" }, 401);
+    if (!response.ok) return json({ error: "auth_service_unavailable" }, 503);
+    const verified = await response.json() as { ok?: unknown; user_id?: unknown };
+    if (verified?.ok !== true || typeof verified.user_id !== "string" || !verified.user_id.trim()) {
+      return json({ error: "unauthorized" }, 401);
+    }
+    subject = verified.user_id.trim();
+  } catch {
+    return json({ error: "auth_service_unavailable" }, 503);
+  }
 
-  // Never trust a role embedded in a token as the current authorization source.
-  // Resolve active staff status and role from the D1 profile on every request.
+  // Identity is linked by an explicitly provisioned subject, never by email alone.
+  // Current role and active/verified status always come from authoritative D1.
   try {
-    const user = await env.DB.prepare("SELECT u.id,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
-      .bind(claims.idp,claims.sub)
-      .first<{id:string;role:string;isActive:number;identityStatus:string}>();
+    const user = await env.DB.prepare("SELECT u.id,u.email,u.displayName,u.agentId,u.role,u.isActive,u.identityStatus FROM AuthIdentity ai JOIN User u ON u.id=ai.userId WHERE ai.provider=?1 AND ai.authSubject=?2 AND ai.isActive=1 LIMIT 1")
+      .bind("otya-auth", subject)
+      .first<{id:string;email:string;displayName:string;agentId:string|null;role:string;isActive:number;identityStatus:string}>();
     if (!user || user.isActive !== 1 || user.identityStatus !== "VERIFIED" || !isRole(user.role)) {
       return json({error:"staff_access_denied"},403);
     }
-    return { ...claims, role:user.role };
+    return { sub:user.id, idp:"otya-auth", role:user.role };
   } catch {
     return json({error:"identity_lookup_unavailable"},503);
   }
@@ -58,10 +83,14 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
   }
   const auth=await authenticate(request,env); if(isResponse(auth)) return auth;
   try {
-    const savingsResponse = await handleSavingsGroups(request, env as unknown as SavingsEnv, auth as SavingsClaims, requestId);
-    if (savingsResponse) return savingsResponse;
+    if(request.method==="GET"&&url.pathname==="/api/me") {
+      // Actor.sub is the internal staff ID resolved from the verified Otya Auth subject.
+      const staff=await env.DB.prepare("SELECT id,email,displayName,agentId,role,isActive,identityStatus FROM User WHERE id=?1 LIMIT 1").bind(auth.sub).first<{id:string;email:string;displayName:string;agentId:string|null;role:Role;isActive:number;identityStatus:string}>();
+      if(!staff||staff.isActive!==1||staff.identityStatus!=="VERIFIED") return json({error:"staff_access_denied"},403);
+      return json({data:{id:staff.id,email:staff.email,displayName:staff.displayName,agentId:staff.agentId,role:staff.role},requestId});
+    }
     if(request.method==="GET"&&url.pathname==="/api/products") {
-      const rows=await env.DB.prepare("SELECT id,sku,name,description,category,sellingPrice,quantityOnHand,reorderLevel,isActive FROM Product WHERE isActive=1 ORDER BY name LIMIT 200").all();
+      const rows=await env.DB.prepare("SELECT id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel,isActive,updatedAt FROM Product WHERE isActive=1 ORDER BY quantityOnHand ASC,name LIMIT 200").all();
       return json({data:rows.results,requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/products") {
@@ -71,20 +100,60 @@ export default { async fetch(request:Request,env:Env):Promise<Response> {
       const name=typeof b.name==="string"?b.name.trim():"";
       const description=typeof b.description==="string"?b.description.trim():null;
       const category=typeof b.category==="string"?b.category.trim():null;
+      const openingStock: unknown=b.openingStock===undefined?0:b.openingStock;
+      const reorderLevel: unknown=b.reorderLevel===undefined?0:b.reorderLevel;
       if(!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(sku)||name.length<2||name.length>120||
          (description!==null&&description.length>1000)||(category!==null&&category.length>80)||
          !Number.isSafeInteger(b.sellingPrice)||(b.sellingPrice as number)<0||
-         !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0) return json({error:"invalid_product"},400);
+         !Number.isSafeInteger(b.costPrice)||(b.costPrice as number)<0||
+         typeof openingStock!=="number"||!Number.isSafeInteger(openingStock)||openingStock<0||openingStock>999999999||
+         typeof reorderLevel!=="number"||!Number.isSafeInteger(reorderLevel)||reorderLevel<0||reorderLevel>999999999) return json({error:"invalid_product"},400);
 
       const id=crypto.randomUUID();
-      // D1 batch is used so the product and its audit event commit together or not at all.
-      await env.DB.batch([
-        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,0,0)")
-          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice),
+      const statements: D1Statement[]=[
+        env.DB.prepare("INSERT INTO Product (id,sku,name,description,category,costPrice,sellingPrice,quantityOnHand,reorderLevel) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)")
+          .bind(id,sku,name,description,category,b.costPrice,b.sellingPrice,openingStock as number,reorderLevel as number),
         env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,afterState,requestId) VALUES (?1,?2,'CREATE','Product',?3,'Product created through Cloudflare API',?4,?5)")
-          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice}),requestId)
+          .bind(crypto.randomUUID(),auth.sub,id,JSON.stringify({sku,name,category,costPrice:b.costPrice,sellingPrice:b.sellingPrice,openingStock,reorderLevel}),requestId)
+      ];
+      if(openingStock>0) statements.push(
+        env.DB.prepare("INSERT INTO StockMovement (id,productId,actorId,type,quantityDelta,quantityAfter,unitCost,referenceType,referenceId,reason) VALUES (?1,?2,?3,'OPENING',?4,?4,?5,'PRODUCT_OPENING',?2,'Opening stock recorded when product was created.')")
+          .bind(crypto.randomUUID(),id,auth.sub,openingStock as number,b.costPrice)
+      );
+      await env.DB.batch(statements);
+      if (reorderLevel > 0 && (openingStock as number) <= (reorderLevel as number)) {
+        await notifyLowStock(env, { productName: name, sku, quantityOnHand: openingStock as number, reorderLevel: reorderLevel as number });
+      }
+      return json({id,sku,name,openingStock,reorderLevel,requestId},201);
+    }
+    const stockAdjustmentMatch=url.pathname.match(/^\/api\/products\/([^/]+)\/stock-adjustments$/);
+    if(request.method==="POST"&&stockAdjustmentMatch) {
+      if(!can(auth,["SOVEREIGN","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);
+      let b:Record<string,unknown>;
+      try { b=await request.json() as Record<string,unknown>; } catch { return json({error:"invalid_json"},400); }
+      const productId=decodeURIComponent(stockAdjustmentMatch[1]);
+      const delta=b.quantityDelta, reason=typeof b.reason==="string"?b.reason.trim():"";
+      if(!productId||productId.length>80||!Number.isSafeInteger(delta)||delta===0||Math.abs(delta as number)>999999999||reason.length<4||reason.length>240) return json({error:"invalid_adjustment"},400);
+      const before=await env.DB.prepare("SELECT id,sku,name,quantityOnHand,reorderLevel,costPrice,isActive FROM Product WHERE id=?1 LIMIT 1").bind(productId).first<{id:string;sku:string;name:string;quantityOnHand:number;reorderLevel:number;costPrice:number;isActive:number}>();
+      if(!before||before.isActive!==1) return json({error:"product_not_found"},404);
+      if(before.quantityOnHand+(delta as number)<0) return json({error:"insufficient_stock"},409);
+      const after=before.quantityOnHand+(delta as number);
+      // Compare-and-set prevents two simultaneous adjustments overwriting one another.
+      // D1 batch is atomic; dependent inserts only run if the guarded UPDATE changed one row.
+      const results=await env.DB.batch([
+        env.DB.prepare("UPDATE Product SET quantityOnHand=quantityOnHand+?1,updatedAt=CURRENT_TIMESTAMP WHERE id=?2 AND isActive=1 AND quantityOnHand=?3 AND quantityOnHand+?1>=0")
+          .bind(delta,productId,before.quantityOnHand),
+        env.DB.prepare("INSERT INTO StockMovement (id,productId,actorId,type,quantityDelta,quantityAfter,unitCost,referenceType,referenceId,reason) SELECT ?1,?2,?3,'ADJUSTMENT',?4,quantityOnHand,?5,'MANUAL_ADJUSTMENT',?2,?6 FROM Product WHERE id=?2 AND quantityOnHand=?7 AND changes()=1")
+          .bind(crypto.randomUUID(),productId,auth.sub,delta,before.costPrice,reason,after),
+        env.DB.prepare("INSERT INTO AuditEvent (id,actorId,action,entityType,entityId,reason,beforeState,afterState,requestId) SELECT ?1,?2,'UPDATE','PRODUCT_STOCK',?3,?4,?5,?6,?7 FROM Product WHERE id=?3 AND quantityOnHand=?8 AND changes()=1")
+          .bind(crypto.randomUUID(),auth.sub,productId,reason,JSON.stringify({quantityOnHand:before.quantityOnHand}),JSON.stringify({quantityOnHand:after,quantityDelta:delta}),requestId,after)
       ]);
-      return json({id,sku,name,requestId},201);
+      const updateMeta=(results[0] as {meta?:{changes?:number}}|undefined)?.meta;
+      if(updateMeta?.changes!==1) return json({error:"stock_changed_retry"},409);
+      if (before.reorderLevel > 0 && after <= before.reorderLevel) {
+        await notifyLowStock(env, { productName: before.name, sku: before.sku, quantityOnHand: after, reorderLevel: before.reorderLevel });
+      }
+      return json({data:{id:productId,quantityOnHand:after,quantityDelta:delta},requestId});
     }
     if(request.method==="POST"&&url.pathname==="/api/sales") {
       if(!can(auth,["SOVEREIGN","ATTENDANT","MANAGER","MANAGING_DIRECTOR","CHAIRMAN"])) return json({error:"forbidden"},403);

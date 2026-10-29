@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: OmniPoint Single-Business API
+  version: 0.1.0
+  description: |
+    API contract for the owner's own shop. Currency is UGX. This is a development
+    scaffold, not a live payment API. Provider operations and financial posting
+    remain disabled until reviewed safety gates pass.
+servers:
+  - url: http://127.0.0.1:8787
+    description: Local Wrangler development only
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Worker and D1 health check
+      responses:
+        '200':
+          description: Worker and database are available
+        '503':
+          description: Database unavailable
+  /api/products:
+    get:
+      summary: List active inventory products
+      responses:
+        '200':
+          description: Product list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create a product
+      description: Manager or higher. Inserts a product and audit event in a D1 batch.
+      responses:
+        '201':
+          description: Product created
+        '400':
+          description: Invalid product input
+        '403':
+          description: Insufficient role
+        '409':
+          description: Duplicate SKU
+  /api/sales:
+    post:
+      summary: Retail sale posting
+      description: Intentionally disabled until atomic stock, receipt and balanced ledger behavior is tested.
+      responses:
+        '501':
+          description: Sale not recorded; posting is disabled
+  /api/agency-transactions:
+    post:
+      summary: Agency transaction
+      description: Intentionally disabled; no provider call or transaction record is made.
+      responses:
+        '501':
+          description: Provider adapter and safety controls required
+  /api/ledger:
+    get:
+      summary: Read ledger entries
+      parameters:
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [RETAIL, FINTECH_AGENCY]
+      responses:
+        '200':
+          description: Ledger entries
+        '403':
+          description: Manager or higher required
+  /api/reconciliation:
+    post:
+      summary: Create reconciliation
+      description: Intentionally disabled until expected balances are ledger-derived and approval controls are tested.
+      responses:
+        '501':
+          description: Reconciliation not enabled
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Short-lived signed test token
+  responses:
+    Unauthorized:
+      description: Missing, expired or invalid bearer token

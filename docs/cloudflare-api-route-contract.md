@@ -4,9 +4,13 @@ Worker entry: `cloudflare-api/src/index.ts`. Wrangler config binds only to the i
 
 ## Authentication boundary
 
-All routes except `GET /health` require a short-lived HMAC-SHA256 bearer token signed with the `AUTH_HMAC_SECRET` Worker secret. Claims must include the upstream identity subject `sub`, `idp: "supabase"`, `exp`, `iss: "omnipoint"`, and `aud: "omnipoint-api"`. The Worker maps the upstream subject through the unique `AuthIdentity` table and then resolves the current D1 `User` record. The Worker resolves the current role, active state, and identity verification from the D1 `User` row on every request; any role claim in the token is ignored.
+All routes except `GET /health` require a valid short-lived Otya Auth access token. The Worker verifies the bearer token through the private Cloudflare Service Binding `env.AUTH` using `GET https://auth/auth/verify`; it does not trust decoded client claims or a shared static HMAC secret.
 
-**Do not deploy business routes until a trusted issuer, staff identity verification, key rotation, token revocation/session expiry, and role provisioning are implemented and independently tested.** This scaffold does not mint tokens or enroll staff. The `sub` claim is the verified upstream Supabase Auth subject, issued only by a trusted server-side identity bridge after verifying the upstream identity token and a pre-provisioned `AuthIdentity` link. The identity link must never be created by matching email alone. The current Supabase Auth flow is not yet bridged to this Worker. Never create tokens manually in a browser or expose the HMAC secret.
+The verified response must contain `{ ok: true, user_id: string }`. The verified `user_id` is then mapped through an explicitly provisioned `AuthIdentity` link with provider `otya-auth`. The current D1 `User` row is checked on every request for active status, verified identity state, and current role. Email matching alone must never create an identity link, and the browser must never supply a role as proof of authorization.
+
+The new `0005_otya_auth_identity.sql` migration expands the identity-provider constraint while preserving existing rows. It must be applied and tested only against the isolated migration-test database until reviewed. The Wrangler `AUTH` service binding is configuration for the Worker; this change does not deploy it or alter production resources.
+
+**Still required before business routes can be enabled for real use:** explicitly provision and audit the correct owner/staff identity link; test expired/invalid tokens, logout/access-token expiry, disabled or unverified staff, role changes, missing links, Auth service timeout/failure, and D1 failure. Auth verification failure returns a denial or service-unavailable response. Do not provision an owner account or activate money-moving routes as part of this code change.
 
 ## Routes
 

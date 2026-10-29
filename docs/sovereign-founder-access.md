@@ -1,36 +1,52 @@
-# Sovereign Founder Access
+# Sovereign Founder Access — Cloudflare target specification
 
 ## Goal
 
-Introduce a single `SOVEREIGN` authorization role for the verified founder account, representing Founder, Chairman, and Managing Director responsibilities. This is a proposed implementation specification; it does not grant access by itself.
+Provide one protected owner role for the verified founder of Otya Hold Ltd T/A OmniPoint. The role represents owner-level administration for this single shop; it must not be assigned automatically or through public registration. This specification does not grant access by itself.
+
+## Approved platform boundary
+
+- GitHub: source control, reviewed changes and CI.
+- Cloudflare Workers: approved runtime and API.
+- Cloudflare D1: authoritative OmniPoint staff and operational records.
+- Otya Auth: candidate shared identity service, integrated only after its verification contract is explicitly defined and tested.
+- Supabase, Vercel and Appwrite are excluded from the target architecture.
+
+The legacy implementation referenced Supabase Auth, Prisma and PostgreSQL. Those instructions are historical and must not be used to provision a new live owner account.
 
 ## Authorization model
 
-- Add `SOVEREIGN` to the Prisma `UserRole` enum and the corresponding PostgreSQL enum through a reviewed migration.
-- Keep ordinary staff roles unchanged.
-- Centralize permission checks in a server-only authorization module. Do not rely on hidden UI controls or client-supplied role values.
-- Sovereign permissions cover staff administration, management configuration, operational workflows, transaction initiation and authorization, reconciliation, and audit viewing.
-- All privileged actions must require a valid Supabase-authenticated user and a matching active, verified staff profile.
-- Only the explicitly provisioned founder account may receive `SOVEREIGN`. Never allow public sign-up or ordinary staff-management forms to assign this role.
-- Do not allow routine API actions to grant or remove Sovereign privileges. Any future transfer/recovery process must be a separate, explicitly controlled operational procedure.
+- Store the current active staff profile and role in authoritative OmniPoint D1 records.
+- Verify the caller through the reviewed Otya Auth ↔ OmniPoint contract. Prefer the authenticated Cloudflare Service Binding or another independently reviewed token-verification design.
+- Never trust client-supplied roles or stale role claims without a current D1 authorization lookup.
+- Fail closed when the token is expired, invalid, revoked, the auth service is unavailable, the staff profile is inactive/unverified, or the D1 authorization lookup fails.
+- Only the explicitly verified owner account may receive `SOVEREIGN`. Ordinary staff-management flows must never grant this role.
+- Keep the bootstrap process private, one-time, idempotent, auditable and disabled after successful provisioning. No public bootstrap endpoint.
+- Require appropriate step-up verification for high-impact actions such as changing owner access, changing security configuration, exporting sensitive data or authorizing exceptional financial operations.
 
-## Financial integrity
+## Authentication contract blocker
+
+The current OmniPoint Worker scaffold expects a locally HMAC-signed token with `iss: "omnipoint"`, `aud: "omnipoint-api"` and `idp: "supabase"`. Otya Auth currently issues a different JWT claim shape and exposes `GET /auth/verify`. These contracts must not be assumed compatible.
+
+Before enabling owner access through the new runtime, define and test a versioned contract covering issuer, audience, subject mapping, expiry, logout/revocation, key rotation, staff deactivation, role changes, and service failure. Do not merely replace the `supabase` string or copy the signing secret between services.
+
+## Financial integrity and audit
 
 - Preserve append-only ledger and audit history.
-- Correct posted financial errors through linked reversals or adjustment entries, not edits or deletions.
-- Record actor, action, target, reason, request ID, and before/after state where appropriate for every privileged change.
-- Make authorization decisions server-side for every sensitive mutation, including transaction approval, staff role changes, account suspension, and configuration changes.
-- Do not claim live mobile-money execution until provider integration, credentials, callbacks, idempotency, reconciliation, and sandbox/production verification are implemented.
+- Correct posted financial errors through linked reversals or adjustment entries, never by editing or deleting prior financial entries.
+- Record actor, action, target, reason, request ID and relevant before/after state for privileged changes.
+- Perform authorization checks server-side on every sensitive mutation, including staff changes, transaction approvals, configuration changes, exports and reconciliation.
+- Keep live provider operations disabled until provider approval, signed callback verification, replay protection, idempotency, timeout/retry behavior, reversals and reconciliation are tested.
 
-## First-founder bootstrap
+## Provisioning acceptance checklist
 
-1. Confirm the target Supabase Auth user ID and verified email using a privileged, server-side setup process; link the staff profile using the normalized email because OmniPoint resolves staff profiles by email, while the Prisma staff ID is a separate internal ID.
-2. Verify there is no conflicting staff profile and confirm the schema/migration version.
-3. Provision exactly one staff profile for that normalized email, using a new internal Prisma staff ID, role `SOVEREIGN`, `isActive=true`, `identityStatus=VERIFIED`, and approval timestamp; record a bootstrap audit event where supported.
-4. Make the bootstrap operation idempotent and non-public. It must fail closed if the expected account does not match.
-5. Remove/disable the one-time bootstrap path after successful provisioning; never expose service-role credentials in browser code or logs.
-6. Test login, authorization for each permission group, denial for ordinary staff, and financial-history immutability before deployment.
+1. Verify the owner's identity using a protected administrative procedure; never grant access solely because an email address matches.
+2. Confirm the target D1 schema version and ensure there is no conflicting owner/staff record.
+3. Provision the owner role using a reviewed one-time operation that fails closed on mismatch and emits an audit event.
+4. Verify sign-in, logout/revocation, active-staff checks, authorization denials, role changes and failure behavior.
+5. Disable/remove the bootstrap path after successful use and verify it cannot be invoked again.
+6. Keep the account unprovisioned until the auth contract and tests are ready.
 
-## Current limitations
+## Current status
 
-This document does not perform a database mutation, deploy application code, or activate an account. The feature requires coordinated Prisma/schema migration, server authorization changes, tests, and a protected deployment. Keep the existing production deployment protected and do not merge or promote until checks pass.
+This document is a specification, not an executed provisioning action. No owner account has been created or modified by this change. No database, secret, DNS, deployment or payment-provider state has been changed. Do not use this as authorization to launch production.

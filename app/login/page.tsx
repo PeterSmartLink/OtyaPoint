@@ -3,9 +3,10 @@ import { signInAction } from "./actions";
 type LoginPageProps = { searchParams: Promise<{ error?: string; next?: string }> };
 
 const messages: Record<string, string> = {
-  invalid: "Email or password is incorrect.",
+  invalid: "Email or password is incorrect, or sign-in is temporarily rate limited.",
+  "auth-unavailable": "Otya Auth could not complete sign-in. Please try again later.",
   "staff-access": "Your account does not have a verified and active OmniPoint staff profile. Contact an administrator.",
-  "auth-not-configured": "Authentication is not configured yet. Set the Supabase public URL and publishable key in the server environment.",
+  "auth-not-configured": "Otya Auth or the Cloudflare API URL is not configured for this environment yet.",
   "staff-lookup-unavailable": "Staff access could not be verified because the staff database is unavailable. Please contact the system administrator.",
 };
 
@@ -30,7 +31,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </label>
           <button type="submit" style={{ border: 0, borderRadius: 10, padding: "12px 16px", fontWeight: 700, background: "#a5b4fc", color: "#101b2b", cursor: "pointer" }}>Sign in securely</button>
         </form>
-        <p style={{ color: "#94a3b8", fontSize: 12, marginTop: 20 }}>Access requires both a valid Supabase Auth account and an active OmniPoint staff profile. No account is created automatically.</p>
+        <p style={{ color: "#94a3b8", fontSize: 12, marginTop: 20 }}>Access requires a valid Otya Auth account explicitly linked to an active, verified OmniPoint staff profile in Cloudflare D1. No account or staff access is created automatically.</p>
       </section>
     </main>
   );
