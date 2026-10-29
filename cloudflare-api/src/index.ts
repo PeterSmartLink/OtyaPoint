@@ -97,11 +97,21 @@ export default {
     const rid = requestId(request);
     if (request.method === "GET" && url.pathname === "/health") {
       try {
-        const found = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'omni_%'").all<{ name: string }>();
+        const [found, saleColumns] = await Promise.all([
+          env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'omni_%'").all<{ name: string }>(),
+          env.DB.prepare("PRAGMA table_info(omni_retail_sales)").all<{ name: string }>()
+        ]);
         const expected = ["omni_products", "omni_retail_sales", "omni_retail_sale_lines", "omni_stock_movements", "omni_agency_transactions", "omni_ledger_entries", "omni_reconciliation_sessions", "omni_audit_events", "omni_staff_memberships"];
         const names = new Set(found.results.map(row => row.name));
-        const ready = expected.every(name => names.has(name));
-        return json({ service: "omnipoint-api", status: ready ? "ok" : "schema_not_ready", schemaReady: ready, requestId: rid }, ready ? 200 : 503);
+        const hasRequestFingerprint = saleColumns.results.some(column => column.name === "request_fingerprint");
+        const ready = expected.every(name => names.has(name)) && hasRequestFingerprint;
+        return json({
+          service: "otya-point-api",
+          status: ready ? "ok" : "schema_not_ready",
+          schemaReady: ready,
+          saleIdempotencyReady: hasRequestFingerprint,
+          requestId: rid
+        }, ready ? 200 : 503);
       } catch {
         return json({ service: "omnipoint-api", status: "database_unavailable", requestId: rid }, 503);
       }
