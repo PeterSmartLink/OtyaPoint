@@ -14,11 +14,11 @@
 | **Otya Auth** | Shared identity service | Authentication and identity |
 | **Otya Core** | Shared core platform services | Core APIs and reusable platform capabilities |
 | **Otya Next** | Connected application/product | The product currently named Otya Next; preserve its existing function |
-| **OmniPoint** | The owner's own physical business and its operations system | Retail, stock, sales, mobile-money agency workflows and shop-facing customer/staff experience |
+| **OtyaPoint** | The owner's shop and agency operations application | Inventory, retail sales, cashbook, reconciliation and future approved agency workflows |
 | **Otya Media** | Media player | Media-player application, releases and product documentation |
 | **OtyaHub** | Public developer/partner hub | Open-source collaboration, developer documentation and partner onboarding |
 
-For legal business references, write **“Otya Hold Ltd T/A OmniPoint.”** Do not describe OmniPoint as a separate legal entity unless its legal status is formally changed.
+For legal notices, preserve the currently verified legal wording **“Otya Hold Ltd T/A OmniPoint”** unless the owner confirms a formal legal/trading-name change. In product UI and ecosystem navigation, use **OtyaPoint** as the current application/product name. Do not describe OtyaPoint or OmniPoint as a separate legal entity.
 
 ## 2. Visual identity
 
@@ -49,9 +49,9 @@ Use teal and ink as the default combination. Gold is an accent, not a large back
 
 ## 3. Product naming and writing
 
-- Write **Otya OS**, **Otya Server**, **Otya Auth**, **Otya Core**, **Otya Next**, **Otya Media**, **OtyaHub**, and **OmniPoint** exactly as shown.
+- Write **Otya OS**, **Otya Server**, **Otya Auth**, **Otya Core**, **Otya Next**, **Otya Media**, **OtyaHub**, and **OtyaPoint** exactly as shown.
 - Use **Otya family** for the connected suite, not as a replacement for each product's name.
-- Product-specific interfaces should lead with their product name and may include a subtle “Part of Otya OS” descriptor when useful.
+- The legacy repository slug `OmniPoint` may remain for compatibility until a coordinated rename is approved. Product-specific interfaces should lead with their product name and may include a subtle “Part of Otya OS” descriptor when useful.
 - Use **“One connected Otya family”** as the umbrella brand line.
 - Describe capabilities honestly: “planned”, “in development”, “sandbox only”, and “live” must mean different things.
 - Never call a payment integration live, secure, verified, backed up, or production-ready unless the relevant tests and operational evidence exist.
