@@ -35,6 +35,15 @@ jobs:
         run: npm run lint
       - name: Build legacy dashboard (migration checkpoint only)
         run: npm run build
+      - name: Compile payment modules for isolated contract tests
+        run: >-
+          npx tsc cloudflare-api/src/payments/contracts.ts
+          cloudflare-api/src/payments/disabled-provider.ts
+          cloudflare-api/src/payments/quickteller-sandbox.ts
+          --target ES2022 --module commonjs --lib ES2022,DOM
+          --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
+      - name: Test payment request validation and disabled-provider safety
+        run: node --test cloudflare-api/tests/payment_contract.test.cjs
       - name: Smoke test local Cloudflare Worker and fail-closed auth
         shell: bash
         run: |
