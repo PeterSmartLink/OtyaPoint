@@ -167,6 +167,42 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                    VALUES ('sale-two', 'OP-TEST-004', 200, 200, 'CASH', 'unique-key-0001', 'staff-1')"""
             )
 
+    def test_sale_request_fingerprint_migration_is_nullable_and_persisted(self):
+        columns = {
+            row[1]: row for row in self.db.execute(
+                "PRAGMA table_info(omni_retail_sales)"
+            )
+        }
+        self.assertIn("request_fingerprint", columns)
+        # Nullable keeps existing rows readable when the additive migration is applied.
+        self.assertEqual(columns["request_fingerprint"][3], 0)
+
+        self.db.execute(
+            """INSERT INTO omni_retail_sales
+               (id, receipt_number, subtotal, total, payment_method, idempotency_key,
+                actor_id, request_fingerprint)
+               VALUES ('sale-fingerprint', 'OP-FP-001', 200, 200, 'CASH',
+                       'fingerprint-key-001', 'staff-test', 'sha256-synthetic-a')"""
+        )
+        stored = self.db.execute(
+            "SELECT request_fingerprint FROM omni_retail_sales WHERE id='sale-fingerprint'"
+        ).fetchone()[0]
+        self.assertEqual(stored, "sha256-synthetic-a")
+
+    def test_legacy_sale_without_fingerprint_remains_readable_but_unfingerprinted(self):
+        # Migration must not invent a fingerprint for historical sales: callers
+        # must refuse to replay those keys because the original payload is unknown.
+        self.db.execute(
+            """INSERT INTO omni_retail_sales
+               (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id)
+               VALUES ('sale-legacy', 'OP-LEGACY-001', 200, 200, 'CASH',
+                       'legacy-key-001', 'staff-test')"""
+        )
+        row = self.db.execute(
+            "SELECT id, request_fingerprint FROM omni_retail_sales WHERE id='sale-legacy'"
+        ).fetchone()
+        self.assertEqual(row, ("sale-legacy", None))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
