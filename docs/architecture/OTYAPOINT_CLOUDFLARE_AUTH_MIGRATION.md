@@ -32,6 +32,18 @@ This establishes a known route family, not permission to deploy or a guarantee t
 
 The transport must be tested in a non-production preview with synthetic accounts before changing the active login path. Do not send real credentials as a connectivity test. Do not create a new public route or expose the service binding solely to make the dashboard integration work.
 
+## Newly verified identity-provisioning blocker
+
+The existing implementation has two distinct staff identity records that must not be silently conflated:
+
+- The dashboard's Prisma `User` model uses a local `id`, email, role, activation state, and identity-verification status. It currently has no `identitySubject` field.
+- The Cloudflare API authorizes staff by matching the Otya Auth `user_id` to `omni_staff_memberships.identity_subject`, then requires the membership status to be `ACTIVE` and a recognized role.
+- The current staff-invitation action creates the identity through Supabase Admin and then creates a Prisma profile. That does not provision an Otya Auth account or an `omni_staff_memberships` row.
+
+Therefore, a login proxy alone is not a complete or safe migration. Before activating Otya Auth for staff, implement and test an explicit invitation/provisioning flow that creates or invites the Otya identity, maps its immutable user ID to a company-scoped staff membership, and preserves pending approval, duplicate prevention, and audit records. Existing staff must be mapped using verified identity evidence; do not auto-link by email alone or grant access based only on a successful login. Test that pending, rejected, inactive, and cross-company accounts are denied.
+
+Until this is implemented, keep the current login and invitation paths intact. Do not remove Supabase packages, disable the legacy auth environment, or treat a successful Worker build as proof that staff can sign in.
+
 ## Login/session contract
 
 - `POST /auth/login`: validate email/password server-side; use the auth worker's current response shape; set secure HttpOnly cookies only after a successful response. Do not pass through arbitrary upstream headers or return token values to the browser.
