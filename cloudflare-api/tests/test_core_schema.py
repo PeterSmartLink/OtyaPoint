@@ -221,7 +221,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             ).fetchone()[0]
             self.assertEqual(before_movements, 1)
 
-            db.executescript("BEGIN;\\n" + migration.read_text(encoding="utf-8") + "\\nCOMMIT;")
+            db.executescript("BEGIN;\n" + migration.read_text(encoding="utf-8") + "\nCOMMIT;")
 
             self.assertEqual(
                 db.execute("SELECT id, company_id, request_fingerprint FROM omni_retail_sales WHERE id='sale-existing'").fetchone(),
