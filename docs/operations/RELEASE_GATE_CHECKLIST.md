@@ -89,3 +89,19 @@ A deployment proposal must include:
 6. Explicit confirmation that DNS, secrets, production resources, and live payments will not change.
 
 **Stop conditions:** any binding mismatch; unknown migration state; failed tests; inability to restore a backup; missing tenant isolation; public preview exposure; leaked secret; or unexpected production resource reference. Stop and investigate rather than deploying.
+
+## Live Cloudflare inventory reconciliation — 2026-10-29
+
+Read-only Cloudflare API check performed on 2026-10-29:
+
+- The account's Worker script inventory returned exactly these scripts: `otya-auth`, `otya-core`, and `otya-next`.
+- `omnipoint-dev-api` was not present in that inventory.
+- The live `otya-core` settings bind `AUTH` to `otya-auth`, `DB` to D1 `otya-store-db` (ID `ab157fc6-2cbb-4d46-9789-2e4392e16aea`), and include the existing Otya queues/KV/R2 resources. This is production infrastructure and must not be repurposed for OtyaPoint development.
+- The live `otya-auth` settings bind `AUTH_DB` to D1 `otya-auth-db` (ID `b05595f6-260a-4720-acca-4f8b13f5c43e`) and `AUTH_KV` to its existing namespace. Secret values were not read or returned.
+- The repository's OtyaPoint Wrangler file describes a separate development Worker and resources, but their existence/bindings are not proven by this live Worker inventory.
+
+### Decision
+
+Do not deploy `omnipoint-dev-api` yet. First inspect the exact live IDs and bindings for the development D1, R2, KV, queue, and auth service target; verify the intended account/environment; then run a Worker dry-run and local tests. A preview endpoint must remain private (Cloudflare Access or an approved private service path), and must never point to `otya-store-db` or other production resources.
+
+This inventory is a point-in-time observation, not proof of app readiness or a deployment authorization.
