@@ -12,7 +12,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
         self.db = sqlite3.connect(":memory:")
         self.db.execute("PRAGMA foreign_keys = ON")
         for migration in MIGRATIONS:
-            self.db.executescript(migration.read_text(encoding="utf-8"))
+            self.db.executescript("BEGIN;\n" + migration.read_text(encoding="utf-8") + "\nCOMMIT;")
 
     def tearDown(self):
         self.db.close()
