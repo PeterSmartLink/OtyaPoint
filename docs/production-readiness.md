@@ -1,43 +1,68 @@
 # OmniPoint production readiness runbook
 
-This checklist is intentionally conservative. Do not enable live money movement until every applicable gate is verified.
+This checklist is intentionally conservative. Do not enable live money movement until every applicable gate is verified. This document describes readiness requirements, not proof that production is ready.
 
-## 1. Configure Vercel environment variables
+## 1. Database and environment architecture — approval required
 
-Open the OmniPoint project's Settings → Environment Variables.
+**Do not configure OmniPoint's live business database as Supabase merely because the frontend has Supabase Auth or the Prisma schema targets PostgreSQL.** The current ecosystem decision is Cloudflare-first; Supabase is reserved for backup/recovery, not the live OmniPoint business database.
 
-- Confirm `DATABASE_URL` has a valid, non-empty PostgreSQL connection string for the OmniPoint Supabase project. Current audit observed the Production variable but its value was empty. Use Supabase Dashboard → Project Settings → Database → Connection string; use the appropriate pooler/direct format for the deployment runtime. Never commit this value or paste it into chat.
-- Add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted/server-only variable for Production. Obtain it from Supabase Dashboard → Project Settings → API Keys (or the project's API keys page). Never use a `NEXT_PUBLIC_` prefix for this secret.
-- Keep `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` public values only; they must not contain service-role credentials.
-- Several empty integration-created variables with malformed `NEXT_PUBLIC_...` names were observed. Review their integration ownership before deleting them. Do not use these malformed names in application code.
-- Redeploy after changing environment variables, then verify the deployment and server-side database connectivity.
+- Do not paste a Supabase connection string into Vercel `DATABASE_URL`, do not add a Supabase service-role key for business-database access, and do not point production traffic at `omnipoint-migration-test`.
+- `omnipoint-migration-test` is an isolated Cloudflare D1 test/migration resource. It is not a production database.
+- The existing Prisma schema expects PostgreSQL, while Cloudflare D1 uses SQLite. Before choosing the live database adapter, verify SQL dialect, migrations, transaction/atomic-write semantics, concurrency, constraints, backup/restore and runtime compatibility in an isolated test environment. Do not switch providers by changing an environment variable alone.
+- Document the approved authoritative database, service owner, data model, migration/rollback plan and recovery target before configuring production database variables.
+- Keep `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` only if the currently deployed frontend still needs the existing Supabase Auth integration. These are public client configuration values, not database credentials. Verify their actual use and RLS/authorization assumptions before changing them.
+- Never expose a service-role key, database URL, internal token or provider secret through a `NEXT_PUBLIC_...` variable, browser bundle, logs or repository.
+- Several empty integration-created variables with malformed `NEXT_PUBLIC_...` names were previously observed. Review ownership and current references before deleting anything; do not remove variables blindly.
+- Do not redeploy production after environment changes until the approved database design is implemented, a preview is verified, and a rollback plan is ready.
 
 ## 2. Bootstrap the first management administrator
 
-There is currently no staff row in `public."User"`. Do not insert an arbitrary staff row or bypass Supabase Auth.
+There is no verified evidence in this runbook that the first production management profile has been safely provisioned. Do not insert an arbitrary staff row or bypass the active identity provider.
 
-1. In Supabase Dashboard → Authentication → Users, invite `petersmartlink@gmail.com` using the supported dashboard flow.
-2. Verify the recipient controls that mailbox and completes the invite.
-3. Provision the matching staff profile through the reviewed, server-side management onboarding/bootstrap procedure. The first account must be explicitly authorized as `MANAGING_DIRECTOR` or `CHAIRMAN`, verified, active only after approval, and have a unique non-guessable agent ID.
-4. Confirm the audit event is written and that login fails closed until both the Auth identity and active staff profile are valid.
-5. Never create a public bootstrap endpoint, store a password in SQL, or give a user a management role solely because the submitted email matches.
+1. Confirm which identity provider the current preview and production deployment actually use. Supabase Auth, if still present, is an identity dependency only; it does not establish the business-database provider.
+2. Verify that the person being provisioned controls the required account and completes the supported invitation/verification flow.
+3. Provision the matching staff profile only through a reviewed server-side onboarding/bootstrap procedure. Assign `MANAGING_DIRECTOR` or `CHAIRMAN` only after explicit authorization; require a unique non-guessable agent ID and an auditable approval.
+4. Confirm the audit event is written and login fails closed until the identity and active staff profile both pass server-side validation.
+5. Never create a public bootstrap endpoint, store a password in SQL, or grant a management role solely because the submitted email matches.
 
-If the application does not yet provide a secure first-admin bootstrap path, use a reviewed one-time server-side administrative procedure and remove/disable it immediately after provisioning.
+If the application does not yet provide a secure first-admin bootstrap path, use a reviewed one-time server-side administrative procedure and remove/disable it immediately after provisioning. Do not perform this against production until the identity and database architecture is approved.
 
 ## 3. Repository and CI
 
 - Commit `package-lock.json` generated by the project's supported Node/npm version.
-- Change the GitHub Actions dependency step in `.github/workflows/verify.yml` from `npm install` to `npm ci --no-audit --no-fund` and enable npm cache in `actions/setup-node`.
-- Require schema validation, lint, build, and automated tests to pass before merge.
-- Keep the security/onboarding pull request in draft until tests and production gates pass.
+- Use reproducible dependency installation (`npm ci --no-audit --no-fund`) where the lockfile and CI environment support it; enable npm caching in `actions/setup-node`.
+- Require schema validation, lint, build and automated tests to pass before merge.
+- Add route-level tests for authorization, malformed inputs, audit atomicity, stock invariants and ledger invariants. A successful frontend build is not evidence that financial APIs work.
+- Keep security/onboarding changes in review until tests and production gates pass.
 
-## 4. Financial launch gates
+## 4. Retail and financial launch gates
 
-- Keep MTN MoMo/Airtel Money real transactions disabled until sandbox credentials, signed callback verification, replay protection/idempotency, timeout/retry behavior, reversals, reconciliation, and provider approval have been tested.
+- Keep MTN MoMo/Airtel Money real transactions disabled until sandbox credentials, signed callback verification, replay protection/idempotency, timeout/retry behavior, reversals, reconciliation and provider approval have been tested.
 - Test balanced ledger posting and failed/rolled-back transactions against a non-production database.
-- Confirm role authorization, audit immutability, backup/restore, alerting, and incident recovery.
-- Review Uganda-specific legal, tax, data protection, and payment-provider obligations with qualified professionals before production launch.
+- Separate retail inventory/sales/COGS from agency cash, float, commissions and settlement records; permit cross-domain reporting only through explicit, audited permissions.
+- Confirm role authorization, audit immutability, backup/restore, alerting and incident recovery.
+- Do not treat the current D1 API scaffold as a completed financial backend; unsupported sales, agency transaction and reconciliation paths must remain unavailable rather than silently succeeding.
+- Review Uganda-specific legal, tax/EFRIS, data-protection and payment-provider obligations with qualified professionals before production launch.
 
-## 5. Safe verification
+## 5. Safe verification and recovery
 
-Use Supabase Security Advisor and Performance Advisor after schema changes. RLS-enabled tables without policies can be intentional when direct API grants are revoked; do not add broad policies merely to clear a lint notice. Do not drop unused indexes until representative production-like query workloads have been measured.
+- Verify a full backup and a restore into an isolated environment before any production migration.
+- Confirm the selected database supports required migrations, atomic writes, indexes, constraints and concurrency under realistic load.
+- If Supabase is used for recovery, treat it as a separately tested backup/restore target, not a second writable source of truth. Reconcile restored records and prove rollback before any cutover.
+- Review security and performance findings after schema changes. RLS-enabled tables without policies can be intentional only when direct API grants are revoked and access is verified; do not add broad policies merely to clear a lint notice.
+- Do not drop indexes or change production database bindings until representative workloads and rollback procedures have been tested.
+
+## 6. Release approval checklist
+
+Before enabling a production release, record evidence for each item:
+
+- [ ] Approved authoritative business database and identity-provider boundaries.
+- [ ] Passing CI, route-level tests and security review.
+- [ ] Preview verification using non-production data and credentials.
+- [ ] Role/permission tests and audited first-admin provisioning.
+- [ ] Tested migration, backup/restore and rollback.
+- [ ] Financial provider sandbox, idempotency, reversal and reconciliation tests where applicable.
+- [ ] Verified monitoring, alerts, support escalation and incident runbook.
+- [ ] Explicit production approval from the project owner.
+
+No production database, environment variable, DNS, route, identity policy or financial-provider setting should be changed solely to make a checklist appear complete.
