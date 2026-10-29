@@ -124,7 +124,7 @@ export default async function InventoryPage({ searchParams }: PageProps) {
         </div>
         <p style={styles.footnote}>Amounts are shown in UGX. This screen manages inventory records only; it does not create a retail sale or post a financial ledger entry.</p>
       </section>
-      <footer style={styles.footer}>OmniPoint UG Limited · Retail inventory · Access: {staff.role.replaceAll("_", " ")}</footer>
+      <footer style={styles.footer}>OtyaPoint · Retail inventory · Access: {staff.role.replaceAll("_", " ")}</footer>
     </main>
   );
 }
