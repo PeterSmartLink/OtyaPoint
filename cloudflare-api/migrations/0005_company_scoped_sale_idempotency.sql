@@ -1,10 +1,9 @@
 -- Replace the legacy global idempotency uniqueness with company-scoped uniqueness.
+-- Wrangler applies each D1 migration atomically; do not nest BEGIN/COMMIT here.
 -- Rebuild both related tables inside one migration transaction: SQLite cannot drop
 -- the parent while sale-line foreign keys still reference it. The staging table
 -- intentionally has no FK so the old parent can be replaced safely. All business
 -- rows, sale-line references, indexes and stock triggers are recreated below.
-BEGIN;
-
 CREATE TABLE omni_retail_sales_new (
   id TEXT PRIMARY KEY,
   receipt_number TEXT NOT NULL UNIQUE,
@@ -115,4 +114,3 @@ BEGIN
     WHERE s.id = NEW.sale_id;
 END;
 
-COMMIT;
