@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OmniPoint | Otya OS",
-  description: "OmniPoint by Otya Hold Ltd T/A OmniPoint — retail and financial-agency operations for the Otya family.",
-  applicationName: "OmniPoint",
+  title: "OtyaPoint | Otya OS",
+  description: "OtyaPoint by Otya Hold Ltd — shop inventory and retail operations for the Otya family.",
+  applicationName: "OtyaPoint",
 };
 
 export const viewport: Viewport = {
