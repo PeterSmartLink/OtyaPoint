@@ -269,18 +269,21 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             index_rows = db.execute("PRAGMA index_list('omni_retail_sales')").fetchall()
             index_names = {row[1] for row in index_rows}
             self.assertIn("idx_omni_sales_company_idempotency", index_names)
-            # SQLite's inline UNIQUE constraint creates an auto-index; the rebuilt
-            # schema must have only the company-scoped unique index for this key.
-            key_indexes = [
-                row[1] for row in index_rows
-                if db.execute(
-                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (row[1],)
-                ).fetchone()[0] is not None
-                and "idempotency_key" in db.execute(
-                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (row[1],)
-                ).fetchone()[0]
-            ]
-            self.assertEqual(key_indexes, ["idx_omni_sales_company_idempotency"])
+            unique_key_column_sets = []
+            for index_row in index_rows:
+                if index_row[2]:
+                    columns = [
+                        info[2] for info in db.execute(
+                            "PRAGMA index_info('" + index_row[1].replace("'", "''") + "')"
+                        ).fetchall()
+                    ]
+                    if "idempotency_key" in columns:
+                        unique_key_column_sets.append(columns)
+            self.assertEqual(
+                unique_key_column_sets,
+                [["company_id", "idempotency_key"]],
+                "idempotency uniqueness must be company-scoped, not global",
+            )
         finally:
             db.close()
 
