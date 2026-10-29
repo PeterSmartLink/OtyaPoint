@@ -15,6 +15,8 @@ python3 cloudflare-api/tests/test_core_schema.py
 
 The D1 development database has the core, company-scope and staff-profile migrations applied and migration history recorded. Core business tables have been verified empty. Local SQLite tests validate schema invariants, but do not prove Cloudflare D1 concurrency or production readiness. The older OmniPoint-only D1, R2, KV and queue resources have been retired; Otya resources remain untouched.
 
+Migration `0004_sale_request_fingerprint.sql` adds a nullable fingerprint to bind a retail-sale idempotency key to its canonical payment method and normalized product/quantity list. Legacy rows remain unverified because their original request payload was not stored; retries for those rows intentionally return HTTP 409 rather than falsely claiming an exact replay. Apply only to the isolated development database after reviewing the target. Do not apply remotely or to production as part of this change.
+
 ## API surface
 
 - `GET /health`: schema readiness only.
