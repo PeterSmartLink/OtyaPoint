@@ -35,6 +35,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   }
 });
 const uuid = () => crypto.randomUUID();
+type SaleReplayRow = { id: string; receipt_number: string; total: number; status: string; request_fingerprint: string | null };
+function replaySale(row: SaleReplayRow) {
+  return { id: row.id, receiptNumber: row.receipt_number, total: row.total, status: row.status };
+}
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
@@ -231,8 +235,7 @@ export default {
           if (!existing.request_fingerprint || existing.request_fingerprint !== requestFingerprint) {
             return json({ error: "idempotency_key_payload_conflict" }, 409);
           }
-          const { request_fingerprint: _fingerprint, ...sale } = existing;
-          return json({ data: sale, replayed: true, requestId: rid });
+          return json({ data: replaySale(existing), replayed: true, requestId: rid });
         }
         const placeholders = normalized.map((_, i) => "?" + (i + 2)).join(",");
         const productRows = await env.DB.prepare(
@@ -282,8 +285,7 @@ export default {
             const replay = await env.DB.prepare("SELECT id,receipt_number,total,status,request_fingerprint FROM omni_retail_sales WHERE idempotency_key=?1 AND company_id=?2").bind(idempotencyKey, staff.company_id).first<{ id: string; receipt_number: string; total: number; status: string; request_fingerprint: string | null }>();
             if (replay) {
               if (!replay.request_fingerprint || replay.request_fingerprint !== requestFingerprint) return json({ error: "idempotency_key_payload_conflict" }, 409);
-              const { request_fingerprint: _fingerprint, ...sale } = replay;
-              return json({ data: sale, replayed: true, requestId: rid });
+              return json({ data: replaySale(replay), replayed: true, requestId: rid });
             }
             return json({ error: "duplicate_conflict" }, 409);
           }
