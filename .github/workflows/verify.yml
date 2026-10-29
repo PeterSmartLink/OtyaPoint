@@ -28,12 +28,55 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 22
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Test Cloudflare Worker auth and notification integration
-        run: npm run test:worker
+      - name: Test Cloudflare Worker auth
+        run: npm run test:worker-auth
+      - name: Test notification integration
+        run: npm run test:notifications
       - name: Lint
         run: npm run lint
       - name: Build legacy dashboard (migration checkpoint only)
         run: npm run build
+      - name: Compile payment and provider scaffolds for isolated contract tests
+        run: >-
+          npx tsc cloudflare-api/src/payments/contracts.ts
+          cloudflare-api/src/payments/disabled-provider.ts
+          cloudflare-api/src/payments/quickteller-sandbox.ts
+          cloudflare-api/src/providers/airtel.ts
+          cloudflare-api/src/providers/interswitch.ts
+          cloudflare-api/src/providers/mtn.ts
+          --target ES2022 --module commonjs --lib ES2022,DOM
+          --strict --skipLibCheck --outDir /tmp/omnipoint-payment-tests
+      - name: Test payment request validation and disabled-provider safety
+        run: node --test cloudflare-api/tests/payment_contract.test.mjs
+      - name: Smoke test local Cloudflare Worker and fail-closed auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.152.0 dev --local --port 8787 --var AUTH_HMAC_SECRET:test-only-secret > "$RUNNER_TEMP/wrangler-smoke.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --silent --show-error --fail http://127.0.0.1:8787/health > "$RUNNER_TEMP/health.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$RUNNER_TEMP/wrangler-smoke.log"
+            echo "Worker health endpoint did not become ready" >&2
+            exit 1
+          fi
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("status") == "ok", d; print("PASS: local Worker health and D1 binding")' "$RUNNER_TEMP/health.json"
+          auth_status=$(curl --silent --output "$RUNNER_TEMP/auth.json" --write-out '%{http_code}' http://127.0.0.1:8787/api/products)
+          if [ "$auth_status" != "401" ]; then
+            cat "$RUNNER_TEMP/auth.json"
+            cat "$RUNNER_TEMP/wrangler-smoke.log"
+            echo "Expected unauthenticated API request to return 401, got $auth_status" >&2
+            exit 1
+          fi
+          echo "PASS: protected API rejects requests without a bearer token"
