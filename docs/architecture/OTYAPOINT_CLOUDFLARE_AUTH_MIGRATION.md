@@ -93,6 +93,34 @@ Before removing `lib/supabase/admin.ts`, implement and test a dedicated privileg
 
 The Otya Auth worker's existing public registration route is not a substitute for this contract.
 
+## Concrete session adapter acceptance contract
+
+The first implementation should be additive and feature-flagged off by default. It must not change the current login path until every gate below passes.
+
+### Cookie and route contract
+
+- Use a host-only, `Secure`, `HttpOnly`, `SameSite=Lax` access cookie and a separate host-only refresh cookie with the narrowest practical `Path` (the refresh endpoint path). Do not set a broad `Domain` attribute unless the verified deployment topology proves it necessary.
+- Cookie names must use the `__Host-` prefix where the required path rules allow it; because refresh cookies need a narrower path, choose and document a compatible name/attribute combination rather than incorrectly applying the prefix.
+- Return `Cache-Control: no-store` on every login, refresh, logout, and session response. Never return tokens in page props, server-action results, browser storage, logs, or error messages.
+- Require same-origin `Origin` on cookie-mutating requests; compare normalized origin to the configured public application origin, not an untrusted `Host` header. Reject missing or mismatched origins for browser-originated mutation requests.
+- Do not follow caller-supplied redirect URLs. Redirects, if required, must be relative paths checked against a strict allow-list.
+- Bound upstream request duration and response size; reject non-JSON, malformed, or unexpected upstream payloads without reflecting raw response bodies to clients.
+
+### Required behavior
+
+| Action | Expected result |
+| --- | --- |
+| Login | Call Otya Auth server-side; set cookies only after a valid response; do not create an OtyaPoint session until staff membership is confirmed active |
+| Refresh | Send refresh cookie server-side; update access cookie; preserve refresh cookie unless upstream explicitly returns a replacement; deny on expired/revoked token |
+| Logout | Attempt upstream revocation; clear both cookies regardless of upstream availability; return no token material |
+| Authenticated business request | Verify access token and re-check active staff membership, company and branch scope, and role on the server |
+| Identity without membership | Deny access; never auto-provision a staff membership from identity login |
+| Staff invitation | Use a dedicated privileged server-side provisioning flow; never use public self-service registration to grant roles |
+
+### Release gate
+
+Before enabling the flag, CI must cover malformed inputs, auth timeout, cookie attributes, CSRF/origin rejection, token expiry/replay/logout behavior, no-membership denial, inactive staff denial, company/branch isolation, and manager-only action authorization. Run the full repository build and Worker checks, then validate with synthetic identities against development-only resources. Leave the flag off until the auth service's refresh/revocation semantics and the exact dashboard runtime/host are verified.
+
 ## Data and authorization migration
 
 - Keep the existing D1 `omnipoint-dev` schema as the development target. Do not point the development Worker at `otya-store-db`.
