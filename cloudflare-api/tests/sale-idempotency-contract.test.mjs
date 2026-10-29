@@ -27,6 +27,14 @@ class Statement {
     return null;
   }
   async all() {
+    if (this.sql.includes("sqlite_master")) {
+      return { results: ["omni_products", "omni_retail_sales", "omni_retail_sale_lines", "omni_stock_movements", "omni_agency_transactions", "omni_ledger_entries", "omni_reconciliation_sessions", "omni_audit_events", "omni_staff_memberships"].map(name => ({ name })) };
+    }
+    if (this.sql.includes("PRAGMA table_info(omni_retail_sales)")) {
+      const names = ["id", "receipt_number", "total"];
+      if (this.db.schemaHasFingerprint) names.push("request_fingerprint");
+      return { results: names.map(name => ({ name })) };
+    }
     if (this.sql.includes("FROM omni_products")) {
       const [companyId, ...ids] = this.values;
       return { results: ids.map(id => this.db.products.get(id)).filter(p => p && p.company_id === companyId).map(p => ({ ...p })) };
@@ -37,7 +45,8 @@ class Statement {
 }
 
 class FakeD1 {
-  constructor({ stock = 10, products = null } = {}) {
+  constructor({ stock = 10, products = null, schemaHasFingerprint = true } = {}) {
+    this.schemaHasFingerprint = schemaHasFingerprint;
     this.staff = {
       id: "staff-1", identity_subject: "identity-1", company_id: "company-1",
       branch_id: null, role: "MANAGER", status: "ACTIVE", display_name: "Synthetic Manager",
@@ -193,4 +202,13 @@ test("insufficient stock rolls back sale, ledger, audit, lines, and stock change
   assert.equal(db.lines.length, 0);
   assert.equal(db.ledger.length, 0);
   assert.equal(db.audit.length, 0);
+});
+test("health fails closed until the sale fingerprint migration is present", async () => {
+  const db = new FakeD1({ schemaHasFingerprint: false });
+  const response = await result(await worker.fetch(new Request("https://otya-point-preview.invalid/health"), envFor(db)));
+
+  assert.equal(response.status, 503);
+  assert.equal(response.body.status, "schema_not_ready");
+  assert.equal(response.body.schemaReady, false);
+  assert.equal(response.body.saleIdempotencyReady, false);
 });
