@@ -44,6 +44,12 @@ Therefore, a login proxy alone is not a complete or safe migration. Before activ
 
 Until this is implemented, keep the current login and invitation paths intact. Do not remove Supabase packages, disable the legacy auth environment, or treat a successful Worker build as proof that staff can sign in.
 
+## Provisioning endpoint safety rule
+
+The inspected Otya Auth Worker exposes `POST /auth/register` as a self-service registration route. It must **not** be used as an administrative staff-invitation endpoint: a public registration flow does not establish management authorization, company ownership, branch assignment, staff role, or approval. Do not send privileged role/company fields from the browser or trust client-supplied claims.
+
+The required next API is a separately authorized, server-to-server staff-provisioning operation. It must authenticate the managing actor, enforce company/branch scope and allowed roles, create or invite the identity idempotently, write the pending staff membership and audit event, and return no credentials. The design must handle partial failure and duplicate requests without leaving orphaned identities or active memberships. Only after this path has tests for unauthorized callers, duplicate invitations, cross-tenant attempts, pending/rejected users, and retries should dashboard login be cut over.
+
 ## Login/session contract
 
 - `POST /auth/login`: validate email/password server-side; use the auth worker's current response shape; set secure HttpOnly cookies only after a successful response. Do not pass through arbitrary upstream headers or return token values to the browser.
