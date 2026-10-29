@@ -184,5 +184,88 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             )
 
 
+    def test_company_scoped_idempotency_migration_preserves_sales_lines_and_triggers(self):
+        migration_files = sorted(
+            (Path(__file__).resolve().parents[1] / "migrations").glob("*.sql")
+        )
+        migration = next(p for p in migration_files if p.name == "0005_company_scoped_sale_idempotency.sql")
+        db = sqlite3.connect(":memory:")
+        db.execute("PRAGMA foreign_keys = ON")
+        try:
+            for path in migration_files:
+                if path.name == migration.name:
+                    break
+                db.executescript(path.read_text(encoding="utf-8"))
+
+            db.execute(
+                """INSERT INTO omni_products
+                   (id, sku, name, category, cost_price, selling_price, quantity_on_hand, company_id)
+                   VALUES ('p-company-1', 'SKU-C1', 'Company 1 product', 'Test', 100, 200, 4, 'company-1')"""
+            )
+            db.execute(
+                """INSERT INTO omni_retail_sales
+                   (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id, company_id, request_fingerprint)
+                   VALUES ('sale-existing', 'OP-MIG-001', 200, 200, 'CASH', 'shared-key', 'staff-1', 'company-1', 'fingerprint-v1')"""
+            )
+            db.execute(
+                """INSERT INTO omni_retail_sale_lines
+                   (id, sale_id, product_id, sku_snapshot, name_snapshot, quantity, unit_price, unit_cost, line_total)
+                   VALUES ('line-existing', 'sale-existing', 'p-company-1', 'SKU-C1', 'Company 1 product', 1, 200, 100, 200)"""
+            )
+            self.assertEqual(
+                db.execute("SELECT quantity_on_hand FROM omni_products WHERE id='p-company-1'").fetchone()[0],
+                3,
+            )
+            before_movements = db.execute(
+                "SELECT COUNT(*) FROM omni_stock_movements WHERE reference_id='sale-existing'"
+            ).fetchone()[0]
+            self.assertEqual(before_movements, 1)
+
+            db.executescript(migration.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                db.execute("SELECT id, company_id, request_fingerprint FROM omni_retail_sales WHERE id='sale-existing'").fetchone(),
+                ("sale-existing", "company-1", "fingerprint-v1"),
+            )
+            self.assertEqual(
+                db.execute("SELECT id, sale_id, product_id, quantity FROM omni_retail_sale_lines WHERE id='line-existing'").fetchone(),
+                ("line-existing", "sale-existing", "p-company-1", 1),
+            )
+            self.assertEqual(
+                db.execute("SELECT quantity_on_hand FROM omni_products WHERE id='p-company-1'").fetchone()[0],
+                3,
+                "migration must not reapply stock deductions",
+            )
+            self.assertEqual(
+                db.execute("SELECT COUNT(*) FROM omni_stock_movements WHERE reference_id='sale-existing'").fetchone()[0],
+                before_movements,
+                "migration must not duplicate stock movements",
+            )
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+            self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+
+            db.execute(
+                """INSERT INTO omni_retail_sales
+                   (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id, company_id)
+                   VALUES ('sale-company-2', 'OP-MIG-002', 200, 200, 'CASH', 'shared-key', 'staff-2', 'company-2')"""
+            )
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.execute(
+                    """INSERT INTO omni_retail_sales
+                       (id, receipt_number, subtotal, total, payment_method, idempotency_key, actor_id, company_id)
+                       VALUES ('sale-company-1-duplicate', 'OP-MIG-003', 200, 200, 'CASH', 'shared-key', 'staff-1', 'company-1')"""
+                )
+
+            trigger_names = {
+                row[0] for row in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='trigger'"
+                )
+            }
+            self.assertIn("omni_sale_line_stock_guard", trigger_names)
+            self.assertIn("omni_sale_line_stock_post", trigger_names)
+        finally:
+            db.close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
