@@ -44,3 +44,17 @@ Do not paste credentials, private keys, or tokens into source code, issues, or c
 - Live money movement or production settlement
 
 These are separate provider products and must not be inferred from Web Checkout access.
+
+## Uganda eligibility and product boundary
+
+Quickteller Business may provide hosted payment links/invoices, transaction and settlement reports, refund/dispute workflows, and supported checkout rails depending on the merchant account and market. Public documentation does **not** prove that all features or rails are available to Otya Hold Ltd in Uganda.
+
+Before selecting this provider, obtain written confirmation from Interswitch of:
+- Uganda merchant eligibility and the exact enabled product.
+- Supported UGX methods, settlement account/currency, fees, and settlement timelines.
+- Refunds, chargebacks, dispute handling, API/webhook access, and support/SLA.
+- Current account-specific authentication, transaction-requery and sandbox requirements.
+
+Quickteller merchant checkout is **not** a substitute for mobile-money agent cash-in/cash-out, agent float purchase, airtime/data VAS or bill-payment services. These require separate products, agreements, provider adapters and reconciliation controls.
+
+Quickteller remains an optional processor. Cloudflare D1 is the source of truth for orders, payment attempts, inventory and ledger. Never store card PAN/CVV or provider secrets in D1. The provider remains disabled until a sandbox is explicitly configured and all tests pass; live collection requires separate owner approval.
