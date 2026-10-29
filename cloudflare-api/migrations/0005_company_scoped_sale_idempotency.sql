@@ -108,7 +108,7 @@ BEGIN
   INSERT INTO omni_stock_movements
     (id, product_id, actor_id, movement_type, quantity_delta, quantity_after, unit_cost, reference_type, reference_id, reason, company_id)
   SELECT lower(hex(randomblob(16))), NEW.product_id, s.actor_id, 'SALE',
-         -NEW.quantity, p.quantity_on_hand, NEW.unit_cost, 'RETAIL_SALE', NEW.id,
+         -NEW.quantity, p.quantity_on_hand, NEW.unit_cost, 'RETAIL_SALE', NEW.sale_id,
          'Stock deducted for receipt ' || s.receipt_number, s.company_id
     FROM omni_retail_sales s
     JOIN omni_products p ON p.id = NEW.product_id AND p.company_id = s.company_id
