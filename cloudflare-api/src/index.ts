@@ -1,3 +1,5 @@
+import { saleRequestFingerprint } from "./sale-fingerprint.mjs";
+
 interface D1Result<T> { results: T[] }
 interface D1Statement {
   bind(...values: unknown[]): D1Statement;
@@ -72,15 +74,6 @@ async function audit(env: Env, actor: string, action: string, entityType: string
 }
 function requestId(request: Request) { return request.headers.get("cf-ray") || uuid(); }
 
-async function saleRequestFingerprint(paymentMethod: string, lines: Array<{ productId: string; quantity: number }>): Promise<string> {
-  const canonical = JSON.stringify({
-    version: 1,
-    paymentMethod,
-    items: [...lines].sort((a, b) => a.productId.localeCompare(b.productId))
-  });
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
-  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-}
 async function parseBody(request: Request): Promise<Record<string, unknown> | Response> {
   if (!(request.headers.get("content-type") || "").toLowerCase().includes("application/json")) return json({ error: "content_type_must_be_json" }, 415);
   const length = Number(request.headers.get("content-length") || "0");
