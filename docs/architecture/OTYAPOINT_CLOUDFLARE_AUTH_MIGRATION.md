@@ -50,6 +50,24 @@ The inspected Otya Auth Worker exposes `POST /auth/register` as a self-service r
 
 The required next API is a separately authorized, server-to-server staff-provisioning operation. It must authenticate the managing actor, enforce company/branch scope and allowed roles, create or invite the identity idempotently, write the pending staff membership and audit event, and return no credentials. The design must handle partial failure and duplicate requests without leaving orphaned identities or active memberships. Only after this path has tests for unauthorized callers, duplicate invitations, cross-tenant attempts, pending/rejected users, and retries should dashboard login be cut over.
 
+## Verified token-lifecycle constraints from the current Otya Auth implementation
+
+The current auth Worker implementation was inspected before designing the session adapter:
+
+- `POST /auth/login` returns both `access_token` and `refresh_token`.
+- `POST /auth/refresh` looks up the supplied refresh token and returns a new access token, but the inspected handler does not rotate the refresh token.
+- `POST /auth/logout` revokes the supplied refresh token in KV. The inspected flow does not itself revoke already-issued access JWTs, so a previously issued access token may remain valid until its expiry unless a separate revocation check exists.
+- `GET /auth/verify` validates the access JWT and returns `user_id` and email; it does not itself establish OtyaPoint staff membership or approval.
+
+Adapter requirements arising from this inspection:
+
+1. On refresh, preserve the existing refresh cookie unless the auth API is deliberately changed to return and rotate a new token; never overwrite it with an absent field.
+2. On logout, clear both browser cookies unconditionally, even if the upstream call fails. Treat residual access-token lifetime as a documented risk; do not claim immediate access-token revocation.
+3. Keep access-token lifetime short, do not expose either token to browser JavaScript, and ensure every business request rechecks the active OtyaPoint membership.
+4. Add tests for replay of a refresh token, concurrent refresh requests, logout followed by reuse of the old access token, expired access tokens, and an identity with no staff membership. Decide whether refresh rotation or token-version/revocation support is needed before treating logout as immediate revocation.
+
+This is a source inspection finding, not proof that the deployed Worker exactly matches the current main branch. Confirm the deployed revision before enabling the new session flow.
+
 ## Login/session contract
 
 - `POST /auth/login`: validate email/password server-side; use the auth worker's current response shape; set secure HttpOnly cookies only after a successful response. Do not pass through arbitrary upstream headers or return token values to the browser.
