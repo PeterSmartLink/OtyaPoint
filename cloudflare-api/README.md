@@ -1,6 +1,6 @@
 # OtyaPoint Cloudflare API
 
-OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OmniPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
+OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OtyaPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
 
 ## Current verified state
 
@@ -38,8 +38,6 @@ Local SQLite tests validate schema invariants; they do not prove Cloudflare D1 c
 
 Migration `0004_sale_request_fingerprint.sql` adds a nullable fingerprint to bind a retail-sale idempotency key to its canonical payment method and normalized product/quantity list. Legacy rows remain unverified because their original request payload was not stored; retries for those rows intentionally return HTTP 409 rather than falsely claiming an exact replay. Apply only to the isolated development database after reviewing the target. Do not apply remotely or to production as part of this change.
 
-Migration `0004_sale_request_fingerprint.sql` adds a nullable fingerprint to bind a retail-sale idempotency key to its canonical payment method and normalized product/quantity list. Legacy rows remain unverified because their original request payload was not stored; retries for those rows intentionally return HTTP 409 rather than falsely claiming an exact replay. Apply only to the isolated development database after reviewing the target. Do not apply remotely or to production as part of this change.
-
 ## API surface
 
 - `GET /health`: schema readiness only.
@@ -49,7 +47,8 @@ Migration `0004_sale_request_fingerprint.sql` adds a nullable fingerprint to bin
 - `POST /api/stock-adjustments`: manager-authorized audited stock movement.
 - `POST /api/sales`: cash-only retail sale with idempotency and ledger/audit records.
 - `GET /api/summary` and `GET /api/ledger`: manager-authorized views.
-- `POST /api/agency-transactions`: disabled; no provider call is made and no transaction is represented as successful.
+- `GET /api/agency-transactions`: authenticated, company-scoped, bounded list; non-managers see only transactions they created. Provider request/response metadata is excluded.
+- `POST /api/agency-transactions`: intentionally disabled until a verified provider adapter, idempotency/replay protection, callback verification, reconciliation and ledger controls are implemented; returns HTTP 501 without calling a provider or writing a transaction.
 
 ## Identity and dashboard integration
 
