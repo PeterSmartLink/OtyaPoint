@@ -43,7 +43,8 @@ async function resetAndMigrate() {
     "0003_staff_profile.sql",
     "0004_sale_request_fingerprint.sql"
   ]) {
-    const sql = readFileSync(new URL(name, migrationsDir), "utf8");
+    const sql = readFileSync(new URL(name, migrationsDir), "utf8")
+      .replace(/^\s*--[^\n]*(?:\n|$)/gm, "");
     await db.exec(sql);
   }
   await run(
