@@ -31,7 +31,6 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
   const [inventorySource, setInventorySource] = useState<"cloudflare" | "unavailable">("unavailable");
 
   useEffect(() => {
-    if (section !== "Inventory") return;
     let cancelled = false;
     fetch("/api/bridge/products", { cache: "no-store" })
       .then(async (response) => {
@@ -52,7 +51,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         setNotice(error instanceof Error ? error.message : "Inventory service is currently unavailable.");
       });
     return () => { cancelled = true; };
-  }, [section]);
+  }, []);
   const [serviceTab, setServiceTab] = useState<"Cash in" | "Cash out">("Cash in");
   const [amount, setAmount] = useState("");
 
