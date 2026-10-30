@@ -129,4 +129,30 @@ test("unmapped identities cannot query company readiness", async () => {
   assert.equal(calls.queries.filter(query => !query.sql.includes("omni_staff_memberships")).length, 0);
 });
 
+test("agency transaction creation remains disabled and performs no writes", async () => {
+  const { env, calls } = makeEnv();
+  const response = await worker.fetch(new Request("https://otyapoint.test/api/agency-transactions", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer synthetic-token",
+      "content-type": "application/json",
+      "idempotency-key": "agency-test-0001"
+    },
+    body: JSON.stringify({
+      provider: "airtel_money",
+      transactionType: "CASH_IN",
+      amount: 1000,
+      customerReference: "synthetic-customer"
+    })
+  }), env);
+  assert.equal(response.status, 501);
+  assert.deepEqual(await response.json(), {
+    error: "provider_adapter_required",
+    detail: "No provider call was made and no agency transaction was recorded."
+  });
+  assert.equal(calls.writes, 0);
+  assert.equal(calls.batches, 0);
+  assert.equal(calls.queries.filter(query => !query.sql.includes("omni_staff_memberships")).length, 0);
+});
+
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));
