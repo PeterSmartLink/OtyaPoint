@@ -14,7 +14,7 @@ Finish the existing OtyaPoint application as one connected system: GitHub source
 - Regression coverage for missing tokens, failed identity verification, Auth service failure, inactive staff, unknown roles, and successful identity-to-staff mapping was merged in PR #82.
 - The dashboard login action in `app/login/actions.ts` still calls `createSupabaseServerClient()`. Other active Supabase SSR, Supabase admin, Prisma, middleware, staff invitation, and data-access paths remain. The dashboard is not yet fully connected to the Cloudflare API.
 - The legacy `app/api/bridge/products/route.ts` locally signs an HS256 token. That locally minted token is not an Otya Auth access token and must not be forwarded to Otya Auth `/auth/verify`. Do not configure this bridge as a trusted identity path.
-- `otyapoint-api` is not confirmed deployed. No custom Worker route is configured in the checked-in Wrangler config. Do not infer live availability from local code or passing CI.
+- A direct read-only Cloudflare account inventory on 2026-10-30 listed only `otya-auth`, `otya-core`, and `otya-next`; querying the deployment endpoint for `otyapoint-api` returned 404 (Worker does not exist). Therefore the OtyaPoint API Worker is **not deployed in the inspected account**. No custom Worker route is configured in the checked-in Wrangler config. Do not infer live availability from local code or passing CI.
 
 ## Target trust boundaries
 
