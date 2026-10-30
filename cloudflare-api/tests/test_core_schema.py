@@ -288,5 +288,78 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
             db.close()
 
 
+    def test_sale_batch_rolls_back_sale_stock_ledger_and_audit_on_late_line_failure(self):
+        """SQLite integration model for D1 batch atomicity; not a live D1 test."""
+        self.db.execute(
+            """INSERT INTO omni_products
+               (id, sku, name, category, cost_price, selling_price, quantity_on_hand, company_id)
+               VALUES ('p-atomic', 'SKU-ATOMIC', 'Atomic test product', 'Test', 100, 200, 2, 'company-atomic')"""
+        )
+        self.db.execute(
+            """INSERT INTO omni_retail_sales
+               (id, receipt_number, subtotal, total, payment_method, idempotency_key,
+                actor_id, company_id, request_fingerprint)
+               VALUES ('sale-atomic', 'OP-ATOMIC-001', 600, 600, 'CASH',
+                       'atomic-key-0001', 'staff-atomic', 'company-atomic', 'fingerprint-atomic-v1')"""
+        )
+        self.db.execute("SAVEPOINT sale_batch")
+        try:
+            # First line succeeds and fires the stock trigger.
+            self.db.execute(
+                """INSERT INTO omni_retail_sale_lines
+                   (id, sale_id, product_id, sku_snapshot, name_snapshot, quantity, unit_price, unit_cost, line_total)
+                   VALUES ('line-atomic-1', 'sale-atomic', 'p-atomic', 'SKU-ATOMIC',
+                           'Atomic test product', 1, 200, 100, 200)"""
+            )
+            # Add the same financial/audit records the route batches after sale lines.
+            self.db.execute(
+                """INSERT INTO omni_ledger_entries
+                   (id, ledger_type, account_code, currency, debit, credit, source_type,
+                    source_id, idempotency_key, description, company_id)
+                   VALUES ('ledger-atomic', 'RETAIL', 'CASH_ON_HAND', 'UGX', 200, 0,
+                           'RETAIL_SALE', 'sale-atomic', 'atomic-ledger-key',
+                           'Synthetic atomicity test', 'company-atomic')"""
+            )
+            self.db.execute(
+                """INSERT INTO omni_audit_events
+                   (id, actor_id, action, entity_type, entity_id, reason, after_state, request_id, company_id)
+                   VALUES ('audit-atomic', 'staff-atomic', 'POST_SALE', 'RETAIL_SALE',
+                           'sale-atomic', 'Synthetic atomicity test', '{}', 'request-atomic',
+                           'company-atomic')"""
+            )
+            # This line must fail because the first line already consumed one of two units.
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.db.execute(
+                    """INSERT INTO omni_retail_sale_lines
+                       (id, sale_id, product_id, sku_snapshot, name_snapshot, quantity, unit_price, unit_cost, line_total)
+                       VALUES ('line-atomic-2', 'sale-atomic', 'p-atomic', 'SKU-ATOMIC',
+                               'Atomic test product', 2, 200, 100, 400)"""
+                )
+            self.db.execute("ROLLBACK TO sale_batch")
+            self.db.execute("RELEASE sale_batch")
+        except Exception:
+            self.db.execute("ROLLBACK TO sale_batch")
+            self.db.execute("RELEASE sale_batch")
+            raise
+
+        self.assertEqual(
+            self.db.execute("SELECT quantity_on_hand FROM omni_products WHERE id='p-atomic'").fetchone()[0],
+            2,
+            "failed sale batch must restore inventory to its original quantity",
+        )
+        for table in ("omni_retail_sales", "omni_retail_sale_lines", "omni_stock_movements",
+                      "omni_ledger_entries", "omni_audit_events"):
+            self.assertEqual(
+                self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE " +
+                                ("id='sale-atomic'" if table == "omni_retail_sales" else
+                                 "sale_id='sale-atomic'" if table == "omni_retail_sale_lines" else
+                                 "reference_id='sale-atomic'" if table == "omni_stock_movements" else
+                                 "source_id='sale-atomic'" if table == "omni_ledger_entries" else
+                                 "entity_id='sale-atomic'")).fetchone()[0],
+                0,
+                f"failed sale batch must leave no {table} records",
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
