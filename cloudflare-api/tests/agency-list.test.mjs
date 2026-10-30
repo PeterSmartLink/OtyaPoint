@@ -108,4 +108,31 @@ test("fails closed when Otya Auth does not verify the identity", async () => {
   assert.equal(calls.queries.filter(call => call.kind === "all").length, 0);
 });
 
+test("agency write endpoint fails closed without provider adapter and never records a transaction", async () => {
+  const { env, calls } = makeEnv();
+  const response = await worker.fetch(new Request("https://otyapoint.test/api/agency-transactions", {
+    method: "POST",
+    headers: {
+      authorization: "Bearer synthetic-token",
+      "content-type": "application/json",
+      "idempotency-key": "agency-test-0001"
+    },
+    body: JSON.stringify({
+      transactionType: "CASH_IN",
+      provider: "airtel",
+      amount: 1000,
+      customerReference: "synthetic-customer"
+    })
+  }), env);
+
+  assert.equal(response.status, 501);
+  assert.deepEqual(await response.json(), {
+    error: "provider_adapter_required",
+    detail: "No provider call was made and no agency transaction was recorded."
+  });
+  assert.equal(calls.queries.filter(call => call.kind === "all").length, 0);
+  assert.equal(calls.queries.some(call => /INSERT|UPDATE|DELETE/i.test(call.sql)), false);
+  assert.equal(calls.auth.length, 1);
+});
+
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));
