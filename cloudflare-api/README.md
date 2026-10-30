@@ -2,18 +2,28 @@
 
 OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OmniPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
 
-## Current configuration and status
+## Current verified state
 
-The root `wrangler.toml` is the canonical OtyaPoint API configuration. It names the Worker `otyapoint-api`, points D1 binding `DB` at `otyapoint-db`, and declares dedicated R2, KV, queue-producer, and Otya Auth service bindings. It disables public `workers.dev` access and defines no custom domain or route.
+- Wrangler config names the API Worker `otyapoint-api`, binds D1 `DB` to `otyapoint-db`, R2 `PRIVATE_FILES` and `BACKUPS`, KV `CACHE`, queue producer `JOBS`, and the Otya Auth service binding.
+- `workers_dev = false`; no custom route is configured. **The API Worker is not confirmed deployed.**
+- The three checked-in migrations are `0001_core.sql`, `0002_company_scope.sql`, and `0003_staff_profile.sql`.
+- The core schema has nine business tables and four stock/sale triggers. The nine core business tables currently contain zero rows; `d1_migrations` contains three migration records.
+- The legacy `omnipoint-dev` D1 database also has zero rows in those nine business tables. Its core schema matches the new database, but the `d1_migrations` table definition differs: legacy uses `name` as its primary key; the new database has an integer `id` plus `name`. This is a migration-history difference, not proof that the databases are interchangeable.
 
-**Configuration is not deployment.** The Worker is not confirmed deployed. Do not attach a public route or enable payment-provider calls until the build, authorization, transaction-integrity, backup/restore, and private-preview gates below pass.
+## Backup and restore evidence (2026-10-30)
 
-The three checked-in migrations are:
-- `cloudflare-api/migrations/0001_core.sql`
-- `cloudflare-api/migrations/0002_company_scope.sql`
-- `cloudflare-api/migrations/0003_staff_profile.sql`
+SQL recovery snapshots were generated through read-only D1 schema/data queries, uploaded to private R2 bucket `otyapoint-backups`, read back, and restored into isolated EU D1 verification databases. Both restores reproduced 35 schema objects, all three migration records, and the observed core business row counts.
 
-A direct Cloudflare D1 schema inspection confirmed the expected business tables and four stock/sale triggers in `otyapoint-db`. The legacy `omnipoint-dev` database has a very similar schema; do not assume either database can be deleted until row-level comparison, a durable backup, and a restore test are complete. An earlier export-download attempt failed, so a verified backup is not yet available. Legacy resources must not be described as retired until their existence, references, and data have been checked.
+| Source database | R2 object key | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| `otyapoint-db` | `d1/otyapoint-db/2026-10-30-recovery.sql` | 11241 | `21051eee120339be5eec44255a2944e596b34af299590cd9cf62f85b51bd564a` |
+| `omnipoint-dev` | `d1/omnipoint-dev/2026-10-30-recovery.sql` | 11175 | `b44fc62409ba6381229c3d3dfa227b0084545649bc79f07c7053a73a34bae93e` |
+
+Verification databases:
+- `otyapoint-restore-verify-20261030`
+- `omnipoint-restore-verify-20261030`
+
+These are point-in-time recovery snapshots, not an automated backup schedule. Keep the snapshots and restore databases until a separate retention/cleanup review. Do not delete either source D1 database based on matching empty business-table counts alone.
 
 ## Local development
 
@@ -37,14 +47,14 @@ Local SQLite tests validate schema invariants; they do not prove Cloudflare D1 c
 - `GET /api/summary` and `GET /api/ledger`: manager-authorized views.
 - `POST /api/agency-transactions`: disabled; no provider call is made and no transaction is represented as successful.
 
-## Identity and access
+## Identity and dashboard integration
 
-Otya Auth is the identity provider. OtyaPoint separately authorizes local staff memberships and roles; a global Otya login alone must never grant shop access. Owner/admin provisioning, recovery, token-contract tests, API authorization tests, sale idempotency/concurrency/rollback tests, and an end-to-end private preview remain release gates.
+Otya Auth is the intended identity provider. OtyaPoint separately authorizes local staff memberships and roles; a global Otya login alone must never grant shop access.
 
-## Cloudflare-first migration
+The current Next.js dashboard still imports Supabase Auth and Prisma. Its existing `/api/bridge/products` route constructs a local HS256 token, then sends it to Otya Auth's `/auth/verify` endpoint. The token contract has not been verified to accept this locally minted token, so the bridge must be treated as **unverified and not production-ready**. Do not configure secrets or enable the bridge until a documented Otya Auth-to-OtyaPoint service-token contract and integration tests are in place.
 
-The repository still contains legacy dashboard dependencies and integration files for Prisma and Supabase. They are not the intended OtyaPoint backend. Do not remove them blindly: first identify every runtime import and UI dependency, migrate the dashboard to the Cloudflare API, test the build, and retain historical migrations until preservation requirements are met. Do not add Supabase, Appwrite, or Vercel to the new runtime unless explicitly approved.
+Migrate the dashboard behind a server-side API boundary in reviewed steps. Do not remove legacy packages or migrations until all runtime imports, login/session flows, staff provisioning, and UI data paths are migrated and tested. Do not add Supabase, Appwrite, or Vercel to the new runtime unless explicitly approved.
 
 ## Money movement and production
 
-Agency-provider transactions remain disabled. No public endpoint, custom domain, live payment-provider operation, or production cutover is enabled by this configuration. Before activation, verify signed provider callbacks, replay protection, idempotency, timeout/retry/reversal handling, reconciliation, balanced ledger invariants, durable backup/restore, alert delivery, and applicable Uganda compliance requirements.
+Agency-provider transactions remain disabled. No public endpoint, custom domain, live payment-provider operation, or production cutover is enabled by this configuration. Before activation, verify signed provider callbacks, replay protection, idempotency, timeout/retry/reversal handling, reconciliation, balanced ledger invariants, backup schedule/restore drills, alert delivery, and applicable Uganda compliance requirements.
