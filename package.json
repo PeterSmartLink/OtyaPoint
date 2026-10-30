@@ -13,7 +13,8 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "check:worker": "tsc --noEmit -p cloudflare-api/tsconfig.json",
     "test:sale-fingerprint": "node --test cloudflare-api/tests/sale-fingerprint.test.mjs",
-    "test:sale-route-idempotency": "node --test cloudflare-api/tests/sale-route-idempotency.test.mjs"
+    "test:sale-route-idempotency": "node --test cloudflare-api/tests/sale-route-idempotency.test.mjs",
+    "test:auth-boundary": "node --test cloudflare-api/tests/auth-boundary.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
