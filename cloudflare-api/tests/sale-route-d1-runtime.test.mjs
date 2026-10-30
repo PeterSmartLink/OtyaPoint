@@ -130,8 +130,8 @@ test("real sales handler uses Miniflare D1 and atomically rolls back a late stoc
 
     const fk = await db.prepare("PRAGMA foreign_key_check").all();
     assert.deepEqual(fk.results, []);
-    const integrity = await db.prepare("PRAGMA integrity_check").first();
-    assert.equal(integrity.integrity_check, "ok");
+    const ledger = await first("SELECT COALESCE(SUM(debit),0) AS debit, COALESCE(SUM(credit),0) AS credit FROM omni_ledger_entries");
+    assert.equal(ledger.debit, ledger.credit, "sale ledger postings must balance");
   } finally {
     await mf.dispose();
     rmSync(tempDir, { recursive: true, force: true });
