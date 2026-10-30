@@ -56,3 +56,16 @@ The source-level API contract is defined, but end-to-end frontend connectivity i
 - CI checks passing and browser/device verification.
 
 Do not deploy, change DNS, alter secrets, enable provider execution, or process live financial transactions as part of this contract alone.
+
+## Authentication contract discovery (2026-10-30)
+
+The connected OtyaEnd repository was inspected read-only. Its Auth Worker documents and implements these server endpoints:
+
+- `POST /auth/login`: email/password login; successful response includes `ok`, `access_token`, `refresh_token`, and a `user` object.
+- `POST /auth/refresh`: request JSON includes `refresh_token`; successful response includes a new `access_token` and may include a rotated `refresh_token`.
+- `POST /auth/logout`: revokes a refresh token.
+- `GET /auth/verify`: bearer access-token verification; the OtyaPoint Worker specifically requires `{ ok: true, user_id: <non-empty string> }`.
+
+This establishes the source-level payload shape, **not** a production-ready OtyaPoint browser session. The current Otya Auth Wrangler entrypoint is `src/production-entrypoint-miniapp.ts`, which wraps the production entrypoint and refresh-token store. OtyaPoint's existing Next.js app does not currently demonstrate a verified Cloudflare service binding/runtime configuration, cookie-domain decision, CSRF/origin controls, refresh rotation behavior, or login/session integration tests. Do not copy cookie-domain settings from another app or assume that the dashboard is hosted under the same parent domain. Validate those deployment facts before implementing browser cookies or forwarding tokens.
+
+The safe next implementation unit is a same-origin session BFF with HttpOnly Secure SameSite cookies, strict same-origin checks for mutating requests, bounded request bodies, no token logging, refresh/logout revocation, and tests for auth outage/rotation/replay. Until that BFF is implemented and tested, keep the product bridge fail-closed and keep legacy authentication dependencies in place; do not mint local JWTs or accept browser-provided identity/role claims.
