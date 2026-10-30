@@ -1,6 +1,6 @@
 # OtyaPoint
 
-OtyaPoint is the retail and financial-agency operations system for **Otya Hold Ltd**, the owner's own business in Uganda. This repository and application use the OtyaPoint product identity; older names such as OmniPoint and PeterSmart Link are retained only where needed to identify legacy code, resource names, or migration history.
+OtyaPoint is the retail and financial-agency operations application for the owner's own shop in Uganda, operated under **Otya Hold Ltd**. The shop's trading identity is **Otya Hold Ltd T/A OmniPoint**; **OtyaPoint is the current application/product name, not a separate legal company**. Older names such as PeterSmart Link are retained only where needed to identify legacy code, resources, or migration history.
 
 ## Current implementation status
 
