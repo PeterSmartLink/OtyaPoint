@@ -20,7 +20,7 @@ const worker = (await import(pathToFileURL(join(tempDir, "index.mjs")).href)).de
 const mf = new Miniflare({
   modules: true,
   script: "export default { fetch() { return new Response('test runtime'); } };",
-  compatibilityDate: "2026-10-28",
+  compatibilityDate: "2026-08-06",
   d1Databases: { DB: "omnipoint-isolated-test" }
 });
 const db = await mf.getD1Database("DB");
