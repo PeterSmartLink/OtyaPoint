@@ -283,6 +283,40 @@ export default {
         return json({ data: { id: saleId, receiptNumber, subtotal, total: subtotal, currency: "UGX", status: "COMPLETED" }, requestId: rid }, 201);
       }
 
+      if (request.method === "GET" && url.pathname === "/api/agency-overview") {
+        const scope = canManage(staff)
+          ? { sql: "company_id = ?1", values: [staff.company_id] as unknown[] }
+          : { sql: "company_id = ?1 AND actor_id = ?2", values: [staff.company_id, staff.id] as unknown[] };
+        const [totals, recent] = await Promise.all([
+          env.DB.prepare(
+            `SELECT COUNT(*) AS transaction_count,
+                    COALESCE(SUM(CASE WHEN provider_status = 'SUCCEEDED' THEN amount ELSE 0 END), 0) AS confirmed_amount,
+                    COALESCE(SUM(CASE WHEN provider_status = 'SUCCEEDED' THEN commission ELSE 0 END), 0) AS confirmed_commission,
+                    COALESCE(SUM(CASE WHEN provider_status IN ('PENDING','UNKNOWN') THEN 1 ELSE 0 END), 0) AS needs_reconciliation,
+                    COALESCE(SUM(CASE WHEN provider_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed_count
+               FROM omni_agency_transactions WHERE ${scope.sql}`
+          ).bind(...scope.values).first<Record<string, number>>(),
+          env.DB.prepare(
+            `SELECT id, reference, transaction_type, provider, provider_status, amount, commission, currency, created_at, updated_at
+               FROM omni_agency_transactions WHERE ${scope.sql}
+              ORDER BY created_at DESC LIMIT 10`
+          ).bind(...scope.values).all()
+        ]);
+        return json({
+          currency: "UGX",
+          transactions: {
+            count: totals?.transaction_count || 0,
+            providerConfirmedAmount: totals?.confirmed_amount || 0,
+            providerConfirmedCommission: totals?.confirmed_commission || 0,
+            needsReconciliation: totals?.needs_reconciliation || 0,
+            failed: totals?.failed_count || 0
+          },
+          recent: recent.results,
+          scope: canManage(staff) ? "company" : "own",
+          requestId: rid
+        });
+      }
+
       if (request.method === "GET" && url.pathname === "/api/agency-transactions") {
         const type = url.searchParams.get("type");
         const status = url.searchParams.get("status");
