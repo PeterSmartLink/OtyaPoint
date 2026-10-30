@@ -283,6 +283,40 @@ export default {
         return json({ data: { id: saleId, receiptNumber, subtotal, total: subtotal, currency: "UGX", status: "COMPLETED" }, requestId: rid }, 201);
       }
 
+      if (request.method === "GET" && url.pathname === "/api/agency-transactions") {
+        const type = url.searchParams.get("type");
+        const status = url.searchParams.get("status");
+        const allowedTypes = ["CASH_IN", "CASH_OUT", "AIRTIME", "BILL_PAYMENT", "FLOAT_ADJUSTMENT", "REVERSAL"];
+        const allowedStatuses = ["DRAFT", "PENDING", "SUCCEEDED", "FAILED", "UNKNOWN", "REVERSED"];
+        if (type && !allowedTypes.includes(type)) return json({ error: "invalid_agency_transaction_type" }, 400);
+        if (status && !allowedStatuses.includes(status)) return json({ error: "invalid_agency_transaction_status" }, 400);
+
+        // Managers can review the company's transactions. Other staff can only
+        // see transactions they created; request/response metadata is never returned.
+        const clauses = ["company_id = ?1"];
+        const values: unknown[] = [staff.company_id];
+        if (!canManage(staff)) {
+          values.push(staff.id);
+          clauses.push(`actor_id = ?${values.length}`);
+        }
+        if (type) {
+          values.push(type);
+          clauses.push(`transaction_type = ?${values.length}`);
+        }
+        if (status) {
+          values.push(status);
+          clauses.push(`provider_status = ?${values.length}`);
+        }
+        const result = await env.DB.prepare(
+          `SELECT id, reference, transaction_type, provider, provider_reference, provider_status, amount, commission, currency, customer_reference, actor_id, created_at, updated_at
+             FROM omni_agency_transactions
+            WHERE ${clauses.join(" AND ")}
+            ORDER BY created_at DESC
+            LIMIT 100`
+        ).bind(...values).all();
+        return json({ data: result.results, requestId: rid });
+      }
+
       if (request.method === "POST" && url.pathname === "/api/agency-transactions") {
         return json({ error: "provider_adapter_required", detail: "No provider call was made and no agency transaction was recorded." }, 501);
       }
