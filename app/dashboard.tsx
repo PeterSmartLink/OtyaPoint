@@ -85,7 +85,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
         {(role === "MANAGING_DIRECTOR" || role === "CHAIRMAN" || role === "SOVEREIGN") && <div className="nav-group"><div className="nav-label">ACCESS CONTROL</div><Link href="/management/staff" className="nav-item"><ShieldCheck size={18}/><span>Staff onboarding</span></Link></div>}
         </nav>
         <div className="sidebar-bottom">
-          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial actions disabled</strong><span>Demo-only; no live payments.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
+          <div className="security-card"><div className="security-icon"><ShieldCheck size={17}/></div><div><strong>Financial controls enabled by authorization</strong><span>Payment actions require approved provider integrations.</span></div><CheckCircle2 size={15} className="success-icon"/></div>
           <button className="nav-item support-link" onClick={() => setNotice("Help centre is not connected yet. Contact your system administrator for assistance.")}><LifeBuoy size={18}/><span>Help & support</span></button>
           <div className="profile-row"><div className="avatar">{displayName.trim().charAt(0).toUpperCase()}</div><div className="profile-copy"><strong>{displayName}</strong><span>{role.replaceAll("_", " ")} · {agentId ?? "Staff account"}</span></div><MoreHorizontal size={19} className="muted-icon"/></div>
         </div>
@@ -108,7 +108,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
             <div className="metric-grid">
               <Metric icon={<ShoppingBag size={18}/>} label="Retail sales" value="UGX —" detail="No sales recorded for this period" tone="violet" />
               <Metric icon={<Wallet size={18}/>} label="Fintech commissions" value="UGX —" detail="No commission records available" tone="blue" />
-              <Metric icon={<Boxes size={18}/>} label="Inventory items" value={String(products.length)} detail="Products in catalogue" tone="amber" />
+              <Metric icon={<Boxes size={18}/>} label="Inventory items" value={inventorySource === "cloudflare" ? String(products.length) : "—"} detail={inventorySource === "cloudflare" ? "Products in catalogue" : "Inventory records unavailable"} tone="amber" />
               <Metric icon={<Activity size={18}/>} label="Reconciliation" value="Not started" detail="No reconciliation records" tone="green" />
             </div>
             <div className="dashboard-grid">
