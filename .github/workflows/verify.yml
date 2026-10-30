@@ -68,6 +68,9 @@ jobs:
       - name: Test Otya Auth identity and staff authorization boundary
         run: npm run test:auth-boundary
 
+      - name: Test agency transaction list authorization and filtering
+        run: npm run test:agency-list
+
       - name: Test legacy products bridge fails closed
         run: npm run test:legacy-products-bridge
 
