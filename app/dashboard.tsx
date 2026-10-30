@@ -74,7 +74,7 @@ export default function Home({ role, displayName, agentId }: DashboardProps) {
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="brand-lockup">
           <div className="brand-mark"><Command size={22} strokeWidth={2.5} /></div>
-          <div><div className="brand-name">OmniPoint<span>.</span></div><div className="brand-subtitle">BUSINESS OPERATIONS</div></div>
+          <div><div className="brand-name">OtyaPoint<span>.</span></div><div className="brand-subtitle">BUSINESS OPERATIONS</div></div>
           <button className="icon-button close-nav" onClick={() => setMobileNav(false)} aria-label="Close menu"><X size={19}/></button>
         </div>
         <div className="workspace-select">
