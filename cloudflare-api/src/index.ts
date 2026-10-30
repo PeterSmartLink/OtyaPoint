@@ -208,7 +208,6 @@ export default {
         const paymentMethod = safeText(body.paymentMethod, 20).toUpperCase();
         const lines = body.items;
         if (!idempotencyKey || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) return json({ error: "idempotency_key_required" }, 400);
-        if (paymentMethod !== "CASH") return json({ error: "payment_method_not_enabled", allowed: ["CASH"] }, 422);
         if (!Array.isArray(lines) || lines.length < 1 || lines.length > 50) return json({ error: "invalid_sale_items" }, 400);
         const normalized: Array<{ productId: string; quantity: number }> = [];
         const seen = new Set<string>();
@@ -226,6 +225,7 @@ export default {
           if (!existing.request_fingerprint || existing.request_fingerprint !== requestFingerprint) return json({ error: "idempotency_key_payload_conflict" }, 409);
           return json({ data: { id: existing.id, receipt_number: existing.receipt_number, total: existing.total, status: existing.status }, replayed: true, requestId: rid });
         }
+        if (paymentMethod !== "CASH") return json({ error: "payment_method_not_enabled", allowed: ["CASH"] }, 422);
         const placeholders = normalized.map((_, i) => "?" + (i + 2)).join(",");
         const productRows = await env.DB.prepare(
           "SELECT id,sku,name,cost_price,selling_price,quantity_on_hand,is_active FROM omni_products WHERE company_id=?1 AND id IN (" + placeholders + ")"
