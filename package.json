@@ -18,7 +18,7 @@
     "test:legacy-products-bridge": "node --test tests/legacy-products-bridge.test.mjs"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.0",
+    "@prisma/client": "^7.10.1",
     "lucide-react": "^0.468.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
