@@ -59,6 +59,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/omnipoint_ci
         run: npm run db:validate
 
+      - name: Test canonical sale fingerprint
+        run: npm run test:sale-fingerprint
+
       - name: Type-check Cloudflare Worker
         run: npm run check:worker
 
