@@ -7,7 +7,6 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { saleRequestFingerprint } from "../src/sale-fingerprint.mjs";
 
-const sourceDir = new URL("../src/", import.meta.url);
 const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(workerSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
