@@ -17,3 +17,7 @@ input,select,textarea{font:inherit;max-width:100%}
 @media(max-width:760px){.sidebar a,.sidebar button{min-height:42px}.topbar button{min-width:38px;min-height:38px}.search-box{min-height:44px}.form-input{min-height:44px;font-size:16px}.pos-product{min-height:94px}.table-wrap{overscroll-behavior-x:contain}.notice-banner{align-items:flex-start;line-height:1.6}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 @media(forced-colors:active){:where(button,a,input,select,textarea):focus-visible{outline:2px solid Highlight}}
+
+
+/* Neutral enterprise empty states for data-backed screens */
+.empty-state{display:flex;align-items:center;justify-content:center;min-height:88px;padding:20px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6;border:1px dashed var(--border);border-radius:12px;background:var(--surface-soft,transparent)}
