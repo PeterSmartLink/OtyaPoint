@@ -1,12 +1,12 @@
 # OtyaPoint
 
-OtyaPoint is the retail and financial-agency operations application for the owner's own shop in Uganda, operated under **Otya Hold Ltd**. The shop's trading identity is **Otya Hold Ltd T/A OmniPoint**; **OtyaPoint is the current application/product name, not a separate legal company**. Older names such as PeterSmart Link are retained only where needed to identify legacy code, resources, or migration history.
+OtyaPoint is the retail and financial-agency operations application for the owner's own shop in Uganda, operated under **Otya Hold Ltd**. The correct company/trading identity is **Otya Hold Ltd T/A OtyaPoint**. **OtyaPoint is the operating business and application name under Otya Hold Ltd**. OmniPoint is a legacy name found in older repository paths, resource names, and migration history; it is not the current trading identity. Older names such as PeterSmart Link are retained only where needed to identify legacy code, resources, or migration history.
 
 ## Current implementation status
 
 The repository contains a responsive Next.js dashboard, a legacy PostgreSQL/Supabase-based application foundation, and a separate Cloudflare Worker/D1 migration path. The Cloudflare API is not yet confirmed connected to the existing dashboard, and it is not ready to execute mobile-money or bill-payment operations.
 
-The Cloudflare account currently contains both canonical OtyaPoint resources and retained legacy-named resources. In particular, the D1 databases `otyapoint-db` and `omnipoint-dev` exist, as do isolated restore-verification databases. The nine core business tables checked on 2026-10-30 were empty in those four D1 databases. This does **not** establish that the legacy PostgreSQL source or every other service has no historical business data. Preserve all potential sources until the authoritative source is identified and recovery is independently verified.
+The Cloudflare account currently contains both canonical OtyaPoint resources and retained legacy-named resources. Resource names such as `omnipoint-dev` are historical identifiers only and must not be interpreted as the current company or trading identity. In particular, the D1 databases `otyapoint-db` and `omnipoint-dev` exist, as do isolated restore-verification databases. The nine core business tables checked on 2026-10-30 were empty in those four D1 databases. This does **not** establish that the legacy PostgreSQL source or every other service has no historical business data. Preserve all potential sources until the authoritative source is identified and recovery is independently verified.
 
 The root `wrangler.toml` declares an `otyapoint-api` Worker, but that Worker was not observed among the deployed Workers during the 2026-10-30 inventory. Configuration is not deployment evidence. No production cutover should be inferred from a local build, schema test, resource creation, or documentation change.
 
