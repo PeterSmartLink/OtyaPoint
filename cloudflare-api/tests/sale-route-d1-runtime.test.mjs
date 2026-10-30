@@ -7,7 +7,6 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { Miniflare } from "miniflare";
 
-const root = new URL("../../", import.meta.url);
 const migrationsDir = new URL("../migrations/", import.meta.url);
 const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(workerSource, {
