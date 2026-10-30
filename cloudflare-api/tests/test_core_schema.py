@@ -295,6 +295,7 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                (id, sku, name, category, cost_price, selling_price, quantity_on_hand, company_id)
                VALUES ('p-atomic', 'SKU-ATOMIC', 'Atomic test product', 'Test', 100, 200, 2, 'company-atomic')"""
         )
+        self.db.execute("SAVEPOINT sale_batch")
         self.db.execute(
             """INSERT INTO omni_retail_sales
                (id, receipt_number, subtotal, total, payment_method, idempotency_key,
@@ -302,7 +303,6 @@ class OmniPointCoreSchemaTests(unittest.TestCase):
                VALUES ('sale-atomic', 'OP-ATOMIC-001', 600, 600, 'CASH',
                        'atomic-key-0001', 'staff-atomic', 'company-atomic', 'fingerprint-atomic-v1')"""
         )
-        self.db.execute("SAVEPOINT sale_batch")
         try:
             # First line succeeds and fires the stock trigger.
             self.db.execute(
