@@ -184,4 +184,41 @@ test("concurrent identical requests produce one creation and one replay in the h
   assert.equal(calls.acceptedBatches, 1);
 });
 
+
+test("actual sales route maps a stock-trigger failure to 409 without reporting success", async () => {
+  const calls = { batchCalls: 0 };
+  const product = { id: "product-1", sku: "SKU-1", name: "Synthetic Product", cost_price: 100, selling_price: 200, quantity_on_hand: 0, is_active: 1 };
+  const db = {
+    prepare(sql) {
+      const statement = {
+        sql, values: [],
+        bind(...values) { this.values = values; return this; },
+        async first() {
+          if (this.sql.includes("FROM omni_staff_memberships")) return staff;
+          if (this.sql.includes("FROM omni_retail_sales")) return null;
+          throw new Error("Unexpected first() SQL in stock conflict test: " + this.sql);
+        },
+        async all() {
+          if (this.sql.includes("FROM omni_products")) return { results: [product] };
+          throw new Error("Unexpected all() SQL in stock conflict test: " + this.sql);
+        },
+        async run() { throw new Error("Unexpected run() SQL in stock conflict test: " + this.sql); }
+      };
+      return statement;
+    },
+    async batch() {
+      calls.batchCalls++;
+      throw new Error("INSUFFICIENT_STOCK");
+    }
+  };
+  const env = {
+    DB: db, PRIVATE_FILES: {}, BACKUPS: {}, CACHE: {}, JOBS: {},
+    AUTH: { async fetch() { return Response.json({ ok: true, user_id: "identity-1", email: "synthetic@example.invalid" }); } }
+  };
+  const response = await postSale(env);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "stock_conflict_or_product_unavailable");
+  assert.equal(calls.batchCalls, 1);
+});
+
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));
