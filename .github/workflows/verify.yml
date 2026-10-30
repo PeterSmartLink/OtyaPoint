@@ -62,6 +62,20 @@ jobs:
       - name: Test canonical sale fingerprint
         run: npm run test:sale-fingerprint
 
+      - name: Test sales route idempotency replay behavior
+        run: npm run test:sale-route-idempotency
+
+      - name: Set up Node.js for Miniflare
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install pinned Miniflare D1 test runtime
+        run: npm install --no-save --no-package-lock miniflare@4.20260730.0
+
+      - name: Test sales route against isolated Miniflare D1
+        run: node --test cloudflare-api/tests/sale-route-d1-runtime.test.mjs
+
       - name: Type-check Cloudflare Worker
         run: npm run check:worker
 
