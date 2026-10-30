@@ -44,7 +44,7 @@ async function resetAndMigrate() {
     "0004_sale_request_fingerprint.sql"
   ]) {
     const sql = readFileSync(new URL(name, migrationsDir), "utf8")
-      .replace(/^\s*--[^\n]*(?:\n|$)/gm, "");
+      .replace(/^[ \t]*--[^\n]*(?:\n|$)/gm, "");
     await db.exec(sql);
   }
   await run(
