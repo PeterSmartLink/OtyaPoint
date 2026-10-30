@@ -1,6 +1,6 @@
 # OtyaPoint Cloudflare API
 
-OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OmniPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
+OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OtyaPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
 
 ## Current verified state
 
@@ -49,6 +49,7 @@ Migration `0004_sale_request_fingerprint.sql` adds a nullable fingerprint to bin
 - `POST /api/stock-adjustments`: manager-authorized audited stock movement.
 - `POST /api/sales`: cash-only retail sale with idempotency and ledger/audit records.
 - `GET /api/summary` and `GET /api/ledger`: manager-authorized views.
+- `GET /api/agency-overview`: provider-confirmed agency totals, reconciliation counts, and recent activity; managers see company-scoped results and other staff see their own transactions.
 - `POST /api/agency-transactions`: disabled; no provider call is made and no transaction is represented as successful.
 
 ## Identity and dashboard integration
