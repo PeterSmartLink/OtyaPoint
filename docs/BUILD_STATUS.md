@@ -36,15 +36,15 @@ Do not delete either database or treat their migration histories as interchangea
 ## Authentication regression and migration status (2026-10-30)
 
 - PR #82 merged Otya Auth identity/staff-authorization regression tests; this verifies the Worker boundary with synthetic identities and mocked services, not deployed authentication or dashboard integration.
-- The existing dashboard login still uses Supabase Auth, and the local HS256 bridge token is incompatible with Otya Auth `/auth/verify`; do not treat the bridge as trusted.
+- The existing dashboard login still uses Supabase Auth. PR #85 removed the local HS256 bridge-token flow and made the products bridge fail closed with HTTP 503 until the Otya Auth session contract is implemented.
 - `docs/OTYA_AUTH_CLOUDFLARE_MIGRATION_RUNBOOK.md` defines the staged migration and explicit release gates. The login/session migration, staff provisioning path, dashboard data migration, and preview deployment remain incomplete.
 
 ## Deployment and application state
 
 - Root `wrangler.toml` targets `otyapoint-api` and `otyapoint-db`.
-- `workers_dev=false`; no custom route is configured. `otyapoint-api` is not confirmed deployed.
+- `workers_dev=false`; no custom route is configured. A direct read-only Cloudflare account inventory on 2026-10-30 listed only `otya-auth`, `otya-core`, and `otya-next`; the `otyapoint-api` deployment lookup returned 404 (Worker does not exist) in the inspected account.
 - The existing Next.js dashboard still imports Supabase Auth and Prisma and is not yet fully connected to the Cloudflare API.
-- The existing products bridge mints a local HS256 token and forwards it to Otya Auth `/auth/verify`. The service-token contract is unverified; this bridge is not production-ready.
+- The products bridge is now deliberately disabled with a non-cacheable 503 and regression coverage until dashboard login/session uses Otya Auth and the verified identity maps to an active D1 staff membership.
 - Agency-provider transaction execution remains disabled. No live payments or public route were enabled.
 
 ## CI and release gates
