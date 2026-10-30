@@ -61,11 +61,27 @@ Do not deploy, change DNS, alter secrets, enable provider execution, or process 
 
 The connected OtyaEnd repository was inspected read-only. Its Auth Worker documents and implements these server endpoints:
 
-- `POST /auth/login`: email/password login; successful response includes `ok`, `access_token`, `refresh_token`, and a `user` object.
+- `POST /auth/login`: send JSON `{ email, password }`. The source validates both fields, normalizes email, applies IP/email attempt limits, and returns `{ ok: true, access_token, refresh_token, user: { id, email, name, avatar_url, is_verified } }` on success. Invalid credentials return 401; throttling returns 429.
 - `POST /auth/refresh`: request JSON includes `refresh_token`; successful response includes a new `access_token` and may include a rotated `refresh_token`.
-- `POST /auth/logout`: revokes a refresh token.
-- `GET /auth/verify`: bearer access-token verification; the OtyaPoint Worker specifically requires `{ ok: true, user_id: <non-empty string> }`.
+- `POST /auth/logout`: revoke the refresh token server-side; confirm the exact request/response behavior from the current route before wiring logout.
+- `GET /auth/verify`: bearer access-token verification; the OtyaPoint Worker specifically requires `{ ok: true, user_id: <non-empty string> }`. Verify the current handler's error responses and exact behavior for expired/revoked tokens in integration tests.
 
 This establishes the source-level payload shape, **not** a production-ready OtyaPoint browser session. The current Otya Auth Wrangler entrypoint is `src/production-entrypoint-miniapp.ts`, which wraps the production entrypoint and refresh-token store. OtyaPoint's existing Next.js app does not currently demonstrate a verified Cloudflare service binding/runtime configuration, cookie-domain decision, CSRF/origin controls, refresh rotation behavior, or login/session integration tests. Do not copy cookie-domain settings from another app or assume that the dashboard is hosted under the same parent domain. Validate those deployment facts before implementing browser cookies or forwarding tokens.
 
 The safe next implementation unit is a same-origin session BFF with HttpOnly Secure SameSite cookies, strict same-origin checks for mutating requests, bounded request bodies, no token logging, refresh/logout revocation, and tests for auth outage/rotation/replay. Until that BFF is implemented and tested, keep the product bridge fail-closed and keep legacy authentication dependencies in place; do not mint local JWTs or accept browser-provided identity/role claims.
+
+
+### Session implementation checklist
+
+Before changing the login action, implement a server-only Auth adapter that can run in the selected OtyaPoint runtime. The runtime is not yet verified, so do not assume Next.js Node APIs or Cloudflare bindings are available in the same environment. Required acceptance tests:
+
+- successful login never returns either token to the browser page, form action result, redirect URL, or logs;
+- invalid credentials and throttling produce generic, non-sensitive UI messages;
+- refresh rotates tokens safely, including concurrent refresh attempts and upstream timeouts;
+- logout revokes the refresh token and clears both cookies using exactly the same Path, Domain, Secure, HttpOnly and SameSite attributes used to set them;
+- mutating same-origin routes reject mismatched Origin/Host and apply CSRF protection; redirects allow only relative paths beginning with one slash;
+- missing/failed Auth binding returns a non-cacheable service-unavailable response and never falls back to legacy Supabase identity;
+- after authentication, every business API call independently verifies the access token and maps `user_id` to an active staff membership in D1;
+- cookies' Domain/Path are chosen only after the actual public dashboard hostname and hosting topology are confirmed. Do not copy a parent-domain cookie configuration from another Otya application.
+
+The existing OtyaPoint login action still calls Supabase. It must remain unchanged until the replacement is implemented against a verified runtime and the above tests pass; otherwise a partial migration could lock out existing users without providing a working alternative.
