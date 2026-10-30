@@ -113,4 +113,20 @@ test("fails closed when Otya Auth does not verify the identity", async () => {
   assert.equal(calls.queries.filter(query => !query.sql.includes("omni_staff_memberships")).length, 0);
 });
 
+test("fails closed when the Otya Auth service is unavailable", async () => {
+  const { env, calls } = makeEnv({ authError: new Error("synthetic auth outage") });
+  const response = await readiness(env);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "auth_service_unavailable" });
+  assert.equal(calls.queries.length, 0);
+});
+
+test("unmapped identities cannot query company readiness", async () => {
+  const { env, calls } = makeEnv({ staff: null, authResponse: { ok: true, user_id: "unmapped-identity" } });
+  const response = await readiness(env);
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "staff_access_denied" });
+  assert.equal(calls.queries.filter(query => !query.sql.includes("omni_staff_memberships")).length, 0);
+});
+
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));
