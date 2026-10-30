@@ -46,6 +46,9 @@ jobs:
       - name: Test OmniPoint core schema and stock invariants
         run: python3 cloudflare-api/tests/test_core_schema.py
 
+      - name: Test local D1 backup restore verifier
+        run: python3 scripts/test_verify_d1_backup.py
+
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
