@@ -1,43 +1,74 @@
-# OmniPoint production readiness runbook
+# OtyaPoint production readiness runbook
 
-This checklist is intentionally conservative. Do not enable live money movement until every applicable gate is verified.
+This runbook reflects the current Cloudflare-first direction. It is a gate checklist, not a claim that production readiness has been achieved. Keep live money movement disabled until every applicable gate is verified.
 
-## 1. Configure Vercel environment variables
+## 1. Canonical runtime
 
-Open the OmniPoint project's Settings → Environment Variables.
+- Source of truth: GitHub repository `PeterSmartLink/OtyaPoint`.
+- API runtime target: Cloudflare Worker `otyapoint-api`.
+- Business database target: Cloudflare D1 `otyapoint-db`.
+- Private object storage and backups: R2 buckets `otyapoint-private` and `otyapoint-backups`.
+- Cache: the configured OtyaPoint KV namespace.
+- Identity: shared Otya Auth Worker, with OtyaPoint-local staff membership and authorization.
+- Transactional email: shared Resend configuration where needed.
 
-- Confirm `DATABASE_URL` has a valid, non-empty PostgreSQL connection string for the OmniPoint Supabase project. Current audit observed the Production variable but its value was empty. Use Supabase Dashboard → Project Settings → Database → Connection string; use the appropriate pooler/direct format for the deployment runtime. Never commit this value or paste it into chat.
-- Add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted/server-only variable for Production. Obtain it from Supabase Dashboard → Project Settings → API Keys (or the project's API keys page). Never use a `NEXT_PUBLIC_` prefix for this secret.
-- Keep `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` public values only; they must not contain service-role credentials.
-- Several empty integration-created variables with malformed `NEXT_PUBLIC_...` names were observed. Review their integration ownership before deleting them. Do not use these malformed names in application code.
-- Redeploy after changing environment variables, then verify the deployment and server-side database connectivity.
+The Wrangler configuration disables public `workers.dev` access and declares no custom route. Do not enable a public route until the restricted preview and release gates pass. Never copy secrets into source control or chat.
 
-## 2. Bootstrap the first management administrator
+## 2. Data preservation and backup/restore
 
-There is currently no staff row in `public."User"`. Do not insert an arbitrary staff row or bypass Supabase Auth.
+- Compare `omnipoint-dev` and `otyapoint-db` by schema, migration history, and business-row counts/table contents using read-only queries.
+- Reconcile discrepancies before selecting the single authoritative OtyaPoint business database.
+- Export each database using the supported Cloudflare D1 export workflow, polling until the export reaches a terminal state.
+- Store the completed export in a verified private backup destination and confirm object size/checksum and retrieval.
+- Restore into an isolated destination and run schema, row-count, stock/ledger invariant, and application tests.
+- Record the restore result and recovery steps before any legacy cleanup.
 
-1. In Supabase Dashboard → Authentication → Users, invite `petersmartlink@gmail.com` using the supported dashboard flow.
-2. Verify the recipient controls that mailbox and completes the invite.
-3. Provision the matching staff profile through the reviewed, server-side management onboarding/bootstrap procedure. The first account must be explicitly authorized as `MANAGING_DIRECTOR` or `CHAIRMAN`, verified, active only after approval, and have a unique non-guessable agent ID.
-4. Confirm the audit event is written and that login fails closed until both the Auth identity and active staff profile are valid.
-5. Never create a public bootstrap endpoint, store a password in SQL, or give a user a management role solely because the submitted email matches.
+The previously attempted temporary export download returned HTTP 403. Until a fresh export is stored and restore-tested, backup/restore is **not verified**. Do not delete a database, bucket, KV namespace, or queue merely because its name contains “old” or “dev”.
 
-If the application does not yet provide a secure first-admin bootstrap path, use a reviewed one-time server-side administrative procedure and remove/disable it immediately after provisioning.
+## 3. Identity, staff access, and owner recovery
 
-## 3. Repository and CI
+- Verify the Otya Auth token contract and audience/issuer expectations.
+- Ensure a valid Otya identity does not grant OtyaPoint access without an active local staff membership.
+- Test least-privilege roles, company scoping, disabled staff, expired/revoked sessions, and denied requests.
+- Create the first manager through a reviewed, authenticated administrative procedure. Do not create a public bootstrap endpoint, store passwords in SQL, or grant a role solely because an email address matches.
+- Verify audit records for staff provisioning and privilege changes.
+- Test owner recovery without weakening MFA or bypassing normal authorization.
 
-- Commit `package-lock.json` generated by the project's supported Node/npm version.
-- Change the GitHub Actions dependency step in `.github/workflows/verify.yml` from `npm install` to `npm ci --no-audit --no-fund` and enable npm cache in `actions/setup-node`.
-- Require schema validation, lint, build, and automated tests to pass before merge.
-- Keep the security/onboarding pull request in draft until tests and production gates pass.
+## 4. Application build and CI
 
-## 4. Financial launch gates
+- Run the existing GitHub Actions verification workflow and fix failures rather than bypassing security checks.
+- Validate all D1 migrations and their order.
+- Run both SQLite schema test suites, Worker type-checking, Wrangler dry-run bundling, lint, and the dashboard build.
+- Use reproducible dependency installation only after a committed lockfile exists and matches the repository's supported Node/npm version.
+- Audit legacy Prisma/Supabase imports and remove runtime dependencies only in reviewed, tested changes after the dashboard is migrated to the Cloudflare API.
+- Require review and successful checks before merging deployment-related changes.
 
-- Keep MTN MoMo/Airtel Money real transactions disabled until sandbox credentials, signed callback verification, replay protection/idempotency, timeout/retry behavior, reversals, reconciliation, and provider approval have been tested.
-- Test balanced ledger posting and failed/rolled-back transactions against a non-production database.
-- Confirm role authorization, audit immutability, backup/restore, alerting, and incident recovery.
-- Review Uganda-specific legal, tax, data protection, and payment-provider obligations with qualified professionals before production launch.
+## 5. Private preview and operational monitoring
 
-## 5. Safe verification
+- Deploy only to a restricted preview without changing DNS, public routes, or the existing customer-facing site.
+- Verify every required binding and secret by name and presence; never print secret values.
+- Test health, identity, authorization, inventory, staff, stock adjustments, cash sale idempotency, ledger balance, and rollback behavior.
+- Confirm logs and traces redact sensitive values, and verify alert routing by causing a controlled non-production alert.
+- Test queue producer/consumer behavior, retries, dead-letter handling, and idempotency before attaching a consumer.
+- Verify backup schedules, restore procedures, and incident response contacts.
 
-Use Supabase Security Advisor and Performance Advisor after schema changes. RLS-enabled tables without policies can be intentional when direct API grants are revoked; do not add broad policies merely to clear a lint notice. Do not drop unused indexes until representative production-like query workloads have been measured.
+## 6. Payment and financial launch gates
+
+Keep Airtel Money, MTN MoMo, Interswitch/Quickteller, and all real-money actions disabled until:
+- Provider approval and sandbox flows are verified.
+- Callback signatures, timestamps, replay protection, and idempotency are implemented and tested.
+- Timeouts, duplicate callbacks, retries, reversals, reconciliation, and failed/rolled-back transactions are covered.
+- Ledger entries remain balanced and immutable, with audit trails for every financial operation.
+- Provider IP allow-list requirements are met through an approved, stable egress design if required.
+- Applicable Uganda tax, financial-service, consumer, and data-protection obligations have been reviewed with qualified professionals.
+
+## 7. Cleanup policy
+
+A resource is eligible for deletion only after:
+1. Its live bindings, code references, queue producers/consumers, and domain dependencies are checked.
+2. Its data is inventoried and, if applicable, backed up and restore-tested.
+3. A replacement is operational and monitored.
+4. The proposed deletion is recorded in a reviewed change.
+5. A rollback or recovery path exists.
+
+Never delete canonical Otya Auth/core/store Workers, Otya assets/release artifacts, or any database with unverified data dependencies as part of routine cleanup.
