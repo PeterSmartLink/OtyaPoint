@@ -1,42 +1,56 @@
-# OmniPoint build status
+# OtyaPoint build and operational status
 
-## Decision
+Last verified: 2026-10-30.
 
-- Cloudflare is the primary runtime and data platform.
+## Architecture decision
+
+- Cloudflare is the target runtime and data platform.
 - GitHub is the canonical source repository and CI platform.
-- D1 is the authoritative relational business database.
-- R2 is for private files and backup artifacts.
-- KV is only for reconstructable cache, never for financial records.
+- D1 is the business data store; R2 stores private files and recovery snapshots.
+- KV is only for reconstructable cache, never financial source-of-truth records.
 - Queues are for asynchronous work after retry/idempotency/dead-letter behavior is tested.
-- Otya Auth provides shared identity; OmniPoint retains its own staff membership and role authorization.
-- AWS is not part of the default stack. Reconsider only for a verified payment-provider requirement.
+- Otya Auth provides shared identity; OtyaPoint retains local staff membership and role authorization.
+- Resend remains the shared transactional email provider.
+- Do not add Supabase, Appwrite, or Vercel to the target runtime unless explicitly approved.
 
-## Current isolated development stack
+## Verified Cloudflare resources
 
-- D1 `omnipoint-dev`, UUID `2c4de5d4-6898-4768-9a60-091bca7779b5`, EU jurisdiction.
-- R2 `omnipoint-dev-private` and `omnipoint-dev-backups`; both currently empty.
-- KV `omnipoint-dev-cache`, UUID `69ca8a463e60410d907749d4e863faf4`.
-- Queues `omnipoint-dev-jobs` and `omnipoint-dev-jobs-dlq`.
-- Core, company-scope and staff-profile migrations applied; migration history recorded.
-- Read-only verification found expected core tables/indexes/triggers, zero rows in the nine core business tables, and no foreign-key violations.
-- A single root `wrangler.toml` points to development resources. `workers_dev=false`; no Worker is deployed, and no route or custom domain is configured.
-- Legacy OmniPoint-only D1 databases, R2 buckets, KV namespace and queues were deleted after checking that no deployed Worker used them, old R2 buckets and KV were empty, and old queues had no producers or consumers.
-- Existing Otya Workers, D1 databases, R2 buckets, KV namespaces, queues and secrets were left untouched.
+- D1 `otyapoint-db`, UUID `65cc4aee-154a-474f-9ed4-aabea0924c98`, EU jurisdiction.
+- D1 `omnipoint-dev`, UUID `2c4de5d4-6898-4768-9a60-091bca7779b5`, EU jurisdiction. Preserve until its role is formally retired.
+- D1 `otya-auth-db` and `otya-store-db` are shared ecosystem resources; do not repurpose or delete them.
+- R2 `otyapoint-private` and `otyapoint-backups` are dedicated OtyaPoint buckets.
+- The backup bucket now contains verified point-in-time SQL snapshots for both OtyaPoint databases; see `cloudflare-api/README.md` for object keys and hashes.
+- The snapshots were restored into isolated EU D1 verification databases: `otyapoint-restore-verify-20261030` and `omnipoint-restore-verify-20261030`.
+- KV `otyapoint-dev-cache` retains namespace ID `69ca8a463e60410d907749d4e863faf4`.
+- Queues `otyapoint-dev-jobs` and `otyapoint-dev-jobs-dlq` exist; no consumer should be attached until retry and DLQ behavior are tested.
+- Existing Otya Workers `otya-auth`, `otya-core`, and `otya-next` remain separate and active.
 
-## Legacy application code
+## D1 state and differences
 
-The existing Next.js dashboard still contains Supabase/Prisma code and is not connected to the Cloudflare API. It is not the target runtime. Remove those dependencies only after migrating the dashboard and verifying it no longer imports them. Do not add new OmniPoint features to the legacy data path.
+Both `otyapoint-db` and `omnipoint-dev` have nine core business tables, four stock/sale triggers, and zero rows in the nine core business tables. Both have three recorded migrations. Their business schemas match by object definitions, but the migration-history table differs:
+- `otyapoint-db`: `d1_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, applied_at ...)`
+- `omnipoint-dev`: `d1_migrations(name TEXT PRIMARY KEY, applied_at ...)`
 
-## Release gates before private preview
+Do not delete either database or treat their migration histories as interchangeable until a reviewed canonicalization plan is approved.
 
-1. CI passes migration validation, schema tests, type-check, lint, build and Wrangler dry-run config validation.
-2. Otya Auth token response and local staff authorization are contract-tested.
-3. Staff provisioning and owner recovery are secure and audited.
-4. Sale posting passes idempotency, concurrency, insufficient-stock, duplicate-request and rollback tests.
-5. Ledger balancing, refunds/reversals and audit behavior are verified.
-6. An independent backup export is retrieved, checksummed and restored to an isolated database.
-7. The UI sends tokens through a secure server-side auth bridge and calls only the documented API.
-8. Preview access is private; logs do not expose secrets or sensitive business records.
-9. Payment providers remain disabled until partner requirements, callbacks, settlement and reconciliation are implemented.
+## Deployment and application state
 
-Passing a build or health check is not proof of production readiness.
+- Root `wrangler.toml` targets `otyapoint-api` and `otyapoint-db`.
+- `workers_dev=false`; no custom route is configured. `otyapoint-api` is not confirmed deployed.
+- The existing Next.js dashboard still imports Supabase Auth and Prisma and is not yet fully connected to the Cloudflare API.
+- The existing products bridge mints a local HS256 token and forwards it to Otya Auth `/auth/verify`. The service-token contract is unverified; this bridge is not production-ready.
+- Agency-provider transaction execution remains disabled. No live payments or public route were enabled.
+
+## CI and release gates
+
+The documentation-only Cloudflare-first PR #77 was merged after Security Baseline and Verify OmniPoint both passed. Those checks validate repository workflows, not end-to-end deployment readiness.
+
+Before private preview:
+1. Define and contract-test service-to-service authentication and staff provisioning.
+2. Migrate dashboard data/auth flows behind a server-side API boundary.
+3. Validate sale atomicity, idempotency, concurrency, stock/ledger invariants, and rollback.
+4. Configure scheduled backups, retention, failure alerts, and restore drills.
+5. Confirm bindings and access controls; verify redaction and alert routing.
+6. Deploy a restricted preview only after build, security, and integration tests pass.
+
+Passing CI, a successful restore, or a health endpoint is not proof of payment-provider or production readiness.
