@@ -6,7 +6,7 @@ Audit date: 2026-10-30 UTC. This inventory separates canonical target resources 
 
 | Resource | Name | Identifier / notes | Status |
 | --- | --- | --- | --- |
-| D1 | `otyapoint-db` | `65cc4aee-154a-474f-9ed4-aabea0924c98`; EU jurisdiction | Newly created; zero tables; migrations still need to be applied and verified |
+| D1 | `otyapoint-db` | `65cc4aee-154a-474f-9ed4-aabea0924c98`; EU jurisdiction | Newly created; only Cloudflare internal `_cf_KV` table observed; business migrations still need to be applied and verified |
 | R2 | `otyapoint-private` | WEUR location; standard storage; default jurisdiction | Newly created; no data copied yet; private access must be verified |
 | R2 | `otyapoint-backups` | WEUR location; standard storage; default jurisdiction | Newly created; no verified backup stored yet |
 | KV | `otyapoint-dev-cache` | `69ca8a463e60410d907749d4e863faf4`; EU jurisdiction | Namespace title renamed in place; namespace ID/data preserved |
@@ -16,17 +16,17 @@ Audit date: 2026-10-30 UTC. This inventory separates canonical target resources 
 
 The naming branch changes `wrangler.toml` to reference the canonical D1, R2, KV and queue names. The configuration change is proposed in a pull request and has not been deployed.
 
-## Retained legacy OtyaPoint resources — rollback only
+## Retained legacy OtyaPoint resources — preserve for migration and rollback
 
 | Resource | Name | Identifier / notes | Action |
 | --- | --- | --- | --- |
-| D1 | `omnipoint-dev` | `2c4de5d4-6898-4768-9a60-091bca7779b5`; EU jurisdiction; account API reports zero tables | Retain until schema/data and rollback checks pass; do not delete during initial cutover |
-| R2 | `omnipoint-dev-private` | Standard storage; previously reported empty | Retain until object inventory and binding checks pass |
-| R2 | `omnipoint-dev-backups` | Standard storage; previously reported empty; no verified backup stored | Retain until the new backup/restore process is tested |
+| D1 | `omnipoint-dev` | `2c4de5d4-6898-4768-9a60-091bca7779b5`; EU jurisdiction; direct read-only query found 10 application tables plus D1 metadata | Not empty. Contains OtyaPoint business schema; inspect row counts and export/verify backup before migrating. Do not delete. |
+| R2 | `omnipoint-dev-private` | Standard storage; previous inventory reported empty, but live object listing has not been independently verified in this pass | Retain until object inventory and binding checks pass |
+| R2 | `omnipoint-dev-backups` | Standard storage; no verified backup currently confirmed | Retain until the new backup/restore process is tested |
 | Queue | `omnipoint-dev-jobs` | `e8e3721ce4934094b2cb3d8fb5cb2edb`; no producer/consumer observed | Retain until repository references and configuration checks pass |
 | Queue | `omnipoint-dev-jobs-dlq` | `ef493d90b8d64801b5c95c2af31f0e31`; no producer/consumer observed | Retain until repository references and configuration checks pass |
 
-No old resources were deleted. No data was copied because the current inventory and repository documentation indicate these development resources are empty; this must be reconfirmed before any future cleanup. Do not write business records to both old and new databases.
+No old resources were deleted and no business data has been copied. The legacy D1 has real schema even though Cloudflare's account-list metadata incorrectly/insufficiently reported zero tables. Treat the old database as containing valuable business data until table-by-table row counts and verified export checks prove otherwise. Do not write business records to both old and new databases.
 
 ## Shared Otya resources — preserve
 
@@ -36,17 +36,19 @@ No old resources were deleted. No data was copied because the current inventory 
 - KV: `otya-core-kv`, `otya-auth-kv`.
 - Queues: `otya-next-jobs`, `otya-next-jobs-dlq`, `otya-push`, `otya-push-dlq`, `otya-release-events`, `otya-release-events-dlq`.
 
-Do not rename, delete, or rebind these shared resources as part of OtyaPoint migration. The Otya Media release bucket and its R2 event queue need a separate dependency-aware migration.
+Read-only queries confirmed application tables in `otya-auth-db` (including users, linked identities, two-factor and security-event tables) and `otya-store-db` (including release, device, notification, audit, user preference and owner action tables). These are not empty databases; preserve them and their bindings. Do not rename, delete, or rebind these shared resources as part of OtyaPoint migration. The Otya Media release bucket and its R2 event queue need a separate dependency-aware migration.
 
 ## Resend
 
-The domain `petersmartlink.com` is verified in Resend for sending and receiving. Keep the verified domain and current DNS intact. Resend remains the shared ecosystem email service; standardize sender display names and role-based addresses only after checking existing inboxes, templates, webhooks, and DNS dependencies. Do not change tracking or sending behavior without a specific need.
+The domain `petersmartlink.com` is verified for sending and receiving. Keep the verified domain and current DNS intact. Resend remains the shared ecosystem email service. Existing published templates and the enabled delivery-events webhook should be preserved while callers are identified. A legacy Appwrite webhook is disabled; do not re-enable it or delete it without dependency review.
 
 ## Release gates
 
-1. Run schema validation and apply the D1 migrations to `otyapoint-db`; verify tables, constraints, indexes, and business invariants.
-2. Verify the new R2 buckets have no public domain or unintended access; test upload/download authorization and backup export/restore.
-3. Validate Wrangler bindings, service binding to `otya-auth`, queue retry/dead-letter behavior, idempotency, transaction atomicity, and concurrency tests.
-4. Run `npm run db:validate`, `npm run lint`, `npm run build`, `python3 migration/d1/test_schema.py`, and `python3 cloudflare-api/tests/test_core_schema.py` in CI.
-5. Keep public routes and live payment-provider operations disabled until authentication, authorization, provider callback verification, reconciliation, backups, and compliance gates pass.
-6. Keep old resources as rollback until cutover is verified. Delete only in a separate cleanup step after dependency scan, verified recovery, and explicit approval.
+1. Export/backup the legacy `omnipoint-dev` D1 and independently verify that the backup restores.
+2. Run schema validation and apply the D1 migrations to `otyapoint-db`; verify tables, constraints, indexes, and business invariants.
+3. Compare the old and new schemas; migrate business data only through an explicit, repeatable migration with checksums, row counts, constraints and rollback.
+4. Verify the new R2 buckets have no public domain or unintended access; test upload/download authorization and backup export/restore.
+5. Validate Wrangler bindings, service binding to `otya-auth`, queue retry/dead-letter behavior, idempotency, transaction atomicity, and concurrency tests.
+6. Run `npm run db:validate`, `npm run lint`, `npm run build`, `python3 migration/d1/test_schema.py`, and `python3 cloudflare-api/tests/test_core_schema.py` in CI.
+7. Keep public routes and live payment-provider operations disabled until authentication, authorization, provider callback verification, reconciliation, backups, and compliance gates pass.
+8. Keep old resources as rollback until cutover is verified. Delete only in a separate cleanup step after dependency scan, verified recovery, and explicit approval.
