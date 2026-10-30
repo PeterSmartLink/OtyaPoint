@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,6 +12,7 @@ const compiled = ts.transpileModule(workerSource, {
 }).outputText;
 const tempDir = mkdtempSync(join(tmpdir(), "otyapoint-auth-boundary-"));
 writeFileSync(join(tempDir, "index.mjs"), compiled);
+copyFileSync(new URL("../src/sale-fingerprint.mjs", import.meta.url), join(tempDir, "sale-fingerprint.mjs"));
 const worker = (await import(pathToFileURL(join(tempDir, "index.mjs")).href)).default;
 
 const activeStaff = {
