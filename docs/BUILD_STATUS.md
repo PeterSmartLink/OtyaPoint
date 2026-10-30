@@ -33,6 +33,12 @@ Both `otyapoint-db` and `omnipoint-dev` have nine core business tables, four sto
 
 Do not delete either database or treat their migration histories as interchangeable until a reviewed canonicalization plan is approved.
 
+## Authentication regression and migration status (2026-10-30)
+
+- PR #82 merged Otya Auth identity/staff-authorization regression tests; this verifies the Worker boundary with synthetic identities and mocked services, not deployed authentication or dashboard integration.
+- The existing dashboard login still uses Supabase Auth, and the local HS256 bridge token is incompatible with Otya Auth `/auth/verify`; do not treat the bridge as trusted.
+- `docs/OTYA_AUTH_CLOUDFLARE_MIGRATION_RUNBOOK.md` defines the staged migration and explicit release gates. The login/session migration, staff provisioning path, dashboard data migration, and preview deployment remain incomplete.
+
 ## Deployment and application state
 
 - Root `wrangler.toml` targets `otyapoint-api` and `otyapoint-db`.
