@@ -117,8 +117,9 @@ test("real sales handler uses Miniflare D1 and atomically rolls back a late stoc
     const replay = await postSale("d1-atomic-key-002", [
       { productId: "product-good", quantity: 1 }
     ]);
-    assert.equal(replay.status, 200, await replay.text());
-    assert.equal((await replay.json()).replayed, true);
+    const replayBody = await replay.json();
+    assert.equal(replay.status, 200, JSON.stringify(replayBody));
+    assert.equal(replayBody.replayed, true);
 
     assert.equal(await count("omni_retail_sales"), 1);
     assert.equal(await count("omni_retail_sale_lines"), 1);
