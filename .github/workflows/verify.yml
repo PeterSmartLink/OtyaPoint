@@ -68,6 +68,9 @@ jobs:
       - name: Test Otya Auth identity and staff authorization boundary
         run: npm run test:auth-boundary
 
+      - name: Test legacy products bridge fails closed
+        run: npm run test:legacy-products-bridge
+
       - name: Set up Node.js for Miniflare
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
