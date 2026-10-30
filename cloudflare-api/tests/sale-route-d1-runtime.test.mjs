@@ -124,7 +124,7 @@ test("real sales handler uses Miniflare D1 and atomically rolls back a late stoc
     assert.equal(await count("omni_retail_sales"), 1);
     assert.equal(await count("omni_retail_sale_lines"), 1);
     assert.equal(await count("omni_stock_movements"), 1);
-    assert.equal(await count("omni_ledger_entries"), 2);
+    assert.equal(await count("omni_ledger_entries"), 4); // cash/revenue plus COGS/inventory double-entry postings
     assert.equal(await count("omni_audit_events"), 1);
     assert.equal(await first("SELECT quantity_on_hand FROM omni_products WHERE id='product-good'").then(r => r.quantity_on_hand), 1);
 
