@@ -1,6 +1,6 @@
 # OtyaPoint Cloudflare API
 
-OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OmniPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
+OtyaPoint is the shop and financial-agency operations system of Otya Hold Ltd T/A OtyaPoint. The intended runtime is Cloudflare Workers + D1 + R2 + KV + Queues, with GitHub for source control and Resend for shared transactional email where required.
 
 ## Current verified state
 
